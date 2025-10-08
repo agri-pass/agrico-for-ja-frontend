@@ -1,0 +1,1 @@
+# agrico-for-ja-frontend
