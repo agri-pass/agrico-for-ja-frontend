@@ -161,7 +161,7 @@ export default function MapContent({
       <div
         id="map"
         className="absolute inset-0"
-        style={{ width: '100%', height: '100%' }}
+        style={{ width: "100%", height: "100%" }}
       />
 
       {/* 統計情報（画面右上） */}
@@ -170,7 +170,7 @@ export default function MapContent({
           title="統計情報"
           style={{
             position: "absolute",
-            top: 16,
+            top: 96,
             right: 16,
             width: 280,
             zIndex: 1000,
@@ -199,7 +199,10 @@ export default function MapContent({
                     <span style={{ color: org.color }}>
                       ● {org.organizationName}:
                     </span>
-                    <span className="font-semibold" style={{ color: org.color }}>
+                    <span
+                      className="font-semibold"
+                      style={{ color: org.color }}
+                    >
                       {org.count}件
                     </span>
                   </div>
@@ -238,7 +241,8 @@ export default function MapContent({
               <span className="text-gray-600">耕作者：</span>
               <span className="text-gray-900 font-medium">
                 {selectedFarmland.isCollectiveOwned
-                  ? selectedFarmland.ownershipInfo?.organizationName || "集落営農法人"
+                  ? selectedFarmland.ownershipInfo?.organizationName ||
+                    "集落営農法人"
                   : "その他"}
               </span>
             </div>
@@ -267,7 +271,10 @@ export default function MapContent({
             <div>
               <span className="text-gray-600">農地区分：</span>
               <span className="text-gray-900 font-medium">
-                {selectedFarmland.feature.properties.ClassificationOfLandCodeName}
+                {
+                  selectedFarmland.feature.properties
+                    .ClassificationOfLandCodeName
+                }
               </span>
             </div>
 
@@ -279,7 +286,10 @@ export default function MapContent({
                 </summary>
                 <div className="mt-2 text-xs text-gray-500 space-y-1 pl-4">
                   <p>ID: {selectedFarmland.feature.properties.DaichoId}</p>
-                  <p>座標: [{selectedFarmland.feature.geometry.coordinates.join(", ")}]</p>
+                  <p>
+                    座標: [
+                    {selectedFarmland.feature.geometry.coordinates.join(", ")}]
+                  </p>
                 </div>
               </details>
             </div>
