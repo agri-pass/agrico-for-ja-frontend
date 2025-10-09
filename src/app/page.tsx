@@ -1,9 +1,9 @@
-import Map from '@/components/Map';
+import { FarmlandMap } from '@/features/farmland-map';
 
 export default function Home() {
   return (
-    <div className="h-screen w-full">
-      <header className="absolute top-0 left-0 right-0 bg-white shadow-md z-[1000] p-4">
+    <div className="fixed inset-0 flex flex-col">
+      <header className="bg-white shadow-md z-[1000] p-4">
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">
@@ -21,9 +21,9 @@ export default function Home() {
           </a>
         </div>
       </header>
-      
-      <main className="pt-20 h-full">
-        <Map />
+
+      <main className="flex-1 min-h-0 h-full">
+        <FarmlandMap />
       </main>
     </div>
   );

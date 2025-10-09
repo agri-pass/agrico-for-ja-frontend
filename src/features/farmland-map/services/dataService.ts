@@ -1,13 +1,9 @@
-import { FarmlandFeature, FarmlandCollection } from "@/types";
+import { FarmlandFeature, FarmlandCollection } from "../types/farmland.types";
+import { OwnedFarmlandCSV, parseOwnedFarmlandCSV } from "../lib/dataMatching";
 import {
-  OwnedFarmlandCSV,
-  parseOwnedFarmlandCSV,
-} from "@/lib/dataMatching";
-import { 
-  performUnifiedMatching, 
+  performUnifiedMatching,
   calculateUniqueCSVMatches,
-  UnifiedMatchingResult 
-} from "@/lib/matchingService";
+} from "../lib/matchingService";
 
 // メモリ内データストア
 export class DataService {
@@ -58,7 +54,10 @@ export class DataService {
       return;
     }
 
-    const result = performUnifiedMatching(this.farmlandFeatures, this.ownedFarmlandCSV);
+    const result = performUnifiedMatching(
+      this.farmlandFeatures,
+      this.ownedFarmlandCSV
+    );
     this.matchingResults = result.matchingResults;
 
     console.log(
@@ -67,9 +66,7 @@ export class DataService {
     console.log(
       `Unique CSV matches: ${result.statistics.uniqueCSVMatches}/${result.statistics.totalCSV}`
     );
-    console.log(
-      `Match rate: ${result.statistics.matchRate.toFixed(1)}%`
-    );
+    console.log(`Match rate: ${result.statistics.matchRate.toFixed(1)}%`);
   }
 
   // 農地データの取得（集落営農法人フラグ付き）
@@ -160,17 +157,23 @@ export class DataService {
 
     // 組織別の色を取得
     const organizationColors = [
-      "#0066CC", "#FF6600", "#9966CC", "#FF9900",
-      "#CC0066", "#00CCAA", "#6633FF", "#FF3366"
+      "#0066CC",
+      "#FF6600",
+      "#9966CC",
+      "#FF9900",
+      "#CC0066",
+      "#00CCAA",
+      "#6633FF",
+      "#FF3366",
     ];
 
     const organizations = new Set<string>();
-    for (const csvData of this.matchingResults.values()) {
+    for (const csvData of Array.from(this.matchingResults.values())) {
       organizations.add(csvData.organizationName);
     }
 
     let colorIndex = 0;
-    for (const org of organizations) {
+    for (const org of Array.from(organizations)) {
       if (org === matchedCSV.organizationName) {
         return organizationColors[colorIndex % organizationColors.length];
       }
@@ -184,7 +187,7 @@ export class DataService {
   getFarmerColorMap(): Map<string, string> {
     const colorMap = new Map<string, string>();
     const defaultColor = "#4ECDC4"; // 青緑色：その他の農地
-    
+
     // 組織別の色パレット
     const organizationColors = [
       "#0066CC", // 青色
@@ -202,20 +205,23 @@ export class DataService {
       this.farmlandFeatures.map((f) => f.properties.FarmerIndicationNumberHash)
     );
 
-    for (const hash of farmerHashes) {
+    for (const hash of Array.from(farmerHashes)) {
       colorMap.set(hash, defaultColor);
     }
 
     // 組織名別に色を割り当て
     const organizations = new Set<string>();
-    for (const csvData of this.matchingResults.values()) {
+    for (const csvData of Array.from(this.matchingResults.values())) {
       organizations.add(csvData.organizationName);
     }
 
     const organizationColorMap = new Map<string, string>();
     let colorIndex = 0;
-    for (const org of organizations) {
-      organizationColorMap.set(org, organizationColors[colorIndex % organizationColors.length]);
+    for (const org of Array.from(organizations)) {
+      organizationColorMap.set(
+        org,
+        organizationColors[colorIndex % organizationColors.length]
+      );
       colorIndex++;
     }
 
@@ -235,29 +241,38 @@ export class DataService {
 
   // 組織別の統計情報を取得
   getOrganizationStatistics() {
-    const orgStats = new Map<string, {
-      count: number;
-      area: number;
-      color: string;
-    }>();
+    const orgStats = new Map<
+      string,
+      {
+        count: number;
+        area: number;
+        color: string;
+      }
+    >();
 
     const organizationColors = [
-      "#0066CC", "#FF6600", "#9966CC", "#FF9900", 
-      "#CC0066", "#00CCAA", "#6633FF", "#FF3366"
+      "#0066CC",
+      "#FF6600",
+      "#9966CC",
+      "#FF9900",
+      "#CC0066",
+      "#00CCAA",
+      "#6633FF",
+      "#FF3366",
     ];
 
     const organizations = new Set<string>();
-    for (const csvData of this.matchingResults.values()) {
+    for (const csvData of Array.from(this.matchingResults.values())) {
       organizations.add(csvData.organizationName);
     }
 
     // 組織別に色を割り当て
     let colorIndex = 0;
-    for (const org of organizations) {
+    for (const org of Array.from(organizations)) {
       orgStats.set(org, {
         count: 0,
         area: 0,
-        color: organizationColors[colorIndex % organizationColors.length]
+        color: organizationColors[colorIndex % organizationColors.length],
       });
       colorIndex++;
     }
@@ -276,7 +291,7 @@ export class DataService {
 
     return Array.from(orgStats.entries()).map(([name, stats]) => ({
       organizationName: name,
-      ...stats
+      ...stats,
     }));
   }
 }

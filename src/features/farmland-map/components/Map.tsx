@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { dataService } from "@/services/dataService";
-import { FarmlandFeature } from "@/types";
+import { dataService } from "../services/dataService";
+import { FarmlandFeature } from "../types/farmland.types";
 
 // Leafletを動的インポート（SSR回避）
 const DynamicMapContent = dynamic(() => import("./MapContent"), {
@@ -80,70 +80,13 @@ export default function Map() {
   }
 
   return (
-    <div className="relative w-full h-screen">
+    <div className="relative w-full h-full">
       <DynamicMapContent
         farmlands={farmlands}
         loading={loading}
         statistics={statistics}
         organizationStats={organizationStats}
       />
-
-      {/* 統計情報（画面右上） */}
-      {statistics && !loading && (
-        <div className="absolute top-4 right-4 bg-white p-4 rounded-lg shadow-lg z-[1000] min-w-[250px]">
-          <h3 className="font-bold text-gray-800 mb-2">統計情報</h3>
-          <div className="space-y-1 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-600">総農地数:</span>
-              <span className="font-semibold">
-                {statistics.total.toLocaleString()}件
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">集落営農法人:</span>
-              <span className="font-semibold text-red-600">
-                {statistics.collective.count.toLocaleString()}件 (
-                {statistics.collective.percentage.toFixed(1)}%)
-              </span>
-            </div>
-            {/* 組織別統計 */}
-            {organizationStats.length > 0 && (
-              <div className="mt-2 space-y-1">
-                {organizationStats.map((org, index) => (
-                  <div key={index} className="flex justify-between text-xs">
-                    <span 
-                      className="text-gray-600"
-                      style={{ color: org.color }}
-                    >
-                      ● {org.organizationName}:
-                    </span>
-                    <span 
-                      className="font-semibold"
-                      style={{ color: org.color }}
-                    >
-                      {org.count}件
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="flex justify-between">
-              <span className="text-gray-600">その他農地:</span>
-              <span className="font-semibold text-teal-600">
-                {statistics.individual.count.toLocaleString()}件 (
-                {statistics.individual.percentage.toFixed(1)}%)
-              </span>
-            </div>
-            <hr className="my-2" />
-            <div className="flex justify-between">
-              <span className="text-gray-600">マッチング率:</span>
-              <span className="font-semibold text-green-600">
-                {statistics.matchRate.toFixed(1)}%
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
-import { FarmlandFeature } from '@/types';
-import { OwnedFarmlandCSV, matchFarmlandWithCSV } from './dataMatching';
+import { FarmlandFeature } from "../types/farmland.types";
+import { OwnedFarmlandCSV, matchFarmlandWithCSV } from "./dataMatching";
 
 export interface UnifiedMatchingResult {
   matchingResults: Map<string, OwnedFarmlandCSV>;
@@ -23,7 +23,10 @@ export function performUnifiedMatching(
   const matchingResults = new Map<string, OwnedFarmlandCSV>();
   const usedCSVRecords = new Set<string>();
   let matchCount = 0;
-  const matched: Array<{ feature: FarmlandFeature; csvData: OwnedFarmlandCSV }> = [];
+  const matched: Array<{
+    feature: FarmlandFeature;
+    csvData: OwnedFarmlandCSV;
+  }> = [];
   const unmatched: FarmlandFeature[] = [];
 
   // 各GeoJSONデータに対してマッチング処理
@@ -31,7 +34,7 @@ export function performUnifiedMatching(
     const matchedCSV = matchFarmlandWithCSV(feature, csvData);
     if (matchedCSV) {
       const csvKey = createCSVKey(matchedCSV);
-      
+
       // まだ使用されていないCSVレコードの場合のみマッチングを認める
       if (!usedCSVRecords.has(csvKey)) {
         matchingResults.set(feature.properties.DaichoId, matchedCSV);
@@ -47,7 +50,7 @@ export function performUnifiedMatching(
   }
 
   // 未マッチCSVデータを特定
-  const unmatchedCSV = csvData.filter(csv => {
+  const unmatchedCSV = csvData.filter((csv) => {
     const csvKey = createCSVKey(csv);
     return !usedCSVRecords.has(csvKey);
   });
@@ -61,23 +64,27 @@ export function performUnifiedMatching(
       totalCSV: csvData.length,
       matchedFeatures: matchCount,
       uniqueCSVMatches,
-      matchRate: (uniqueCSVMatches / csvData.length) * 100
+      matchRate: (uniqueCSVMatches / csvData.length) * 100,
     },
     matched,
     unmatched,
-    unmatchedCSV
+    unmatchedCSV,
   };
 }
 
 // CSVレコードのユニークキーを生成
 function createCSVKey(csv: OwnedFarmlandCSV): string {
-  return `${csv.organizationName}-${csv.oaza}-${csv.koaza}-${csv.chiban}-${csv.edaban || ''}`;
+  return `${csv.organizationName}-${csv.oaza}-${csv.koaza}-${csv.chiban}-${
+    csv.edaban || ""
+  }`;
 }
 
 // ユニークなCSVマッチ数を計算（統計用）
-export function calculateUniqueCSVMatches(matchingResults: Map<string, OwnedFarmlandCSV>): number {
+export function calculateUniqueCSVMatches(
+  matchingResults: Map<string, OwnedFarmlandCSV>
+): number {
   const uniqueCSVKeys = new Set<string>();
-  for (const csvData of matchingResults.values()) {
+  for (const csvData of Array.from(matchingResults.values())) {
     const csvKey = createCSVKey(csvData);
     uniqueCSVKeys.add(csvKey);
   }

@@ -1,4 +1,4 @@
-import { FarmlandFeature } from "@/types";
+import { FarmlandFeature } from "../types/farmland.types";
 
 // CSVデータの型定義
 export interface OwnedFarmlandCSV {
@@ -172,7 +172,14 @@ export function analyzeAddress(address: string): {
   koaza?: string;
   chiban?: string;
 } {
-  const result: any = {};
+  const result: {
+    prefecture?: string;
+    city?: string;
+    town?: string;
+    oaza?: string;
+    koaza?: string;
+    chiban?: string;
+  } = {};
 
   // 都道府県
   const prefMatch = address.match(/^([^県]+県)/);
