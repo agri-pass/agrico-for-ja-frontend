@@ -1,15 +1,24 @@
-import { FarmlandFeature, FarmlandCollection } from "../types/farmland.types";
+import {
+  FarmlandFeature,
+  FarmlandCollection,
+  PolygonFeature,
+  PolygonCollection,
+  FarmlandWithPolygon,
+} from "../types/farmland.types";
 import { OwnedFarmlandCSV, parseOwnedFarmlandCSV } from "../lib/dataMatching";
 import {
   performUnifiedMatching,
   calculateUniqueCSVMatches,
 } from "../lib/matchingService";
+import * as turf from "@turf/turf";
 
 // メモリ内データストア
 export class DataService {
   private farmlandFeatures: FarmlandFeature[] = [];
+  private polygonFeatures: PolygonFeature[] = [];
   private ownedFarmlandCSV: OwnedFarmlandCSV[] = [];
   private matchingResults: Map<string, OwnedFarmlandCSV> = new Map();
+  private farmlandWithPolygons: FarmlandWithPolygon[] = [];
 
   // GeoJSONデータの読み込み
   async loadGeoJSON(path: string = "/data/pin.geojson"): Promise<void> {
@@ -21,8 +30,36 @@ export class DataService {
 
       // マッチング処理を実行
       this.performMatching();
+      // 空間結合を実行
+      this.performSpatialJoin();
     } catch (error) {
       console.error("Failed to load GeoJSON:", error);
+      throw error;
+    }
+  }
+
+  // Polygonデータの読み込み
+  async loadPolygons(path: string = "/data/polygon.geojson"): Promise<void> {
+    try {
+      console.log(`Loading polygon data from: ${path}`);
+      const response = await fetch(path);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const text = await response.text();
+      // BOMを削除
+      const cleanText = text.replace(/^\uFEFF/, '');
+      const data: PolygonCollection = JSON.parse(cleanText);
+
+      this.polygonFeatures = data.features;
+      console.log(`Loaded ${this.polygonFeatures.length} polygon features`);
+
+      // 空間結合を実行
+      this.performSpatialJoin();
+    } catch (error) {
+      console.error("Failed to load Polygon GeoJSON:", error);
       throw error;
     }
   }
@@ -69,11 +106,68 @@ export class DataService {
     console.log(`Match rate: ${result.statistics.matchRate.toFixed(1)}%`);
   }
 
+  // 空間結合処理（Turfを使用してpoint-in-polygon判定）
+  private performSpatialJoin(): void {
+    if (
+      this.farmlandFeatures.length === 0 ||
+      this.polygonFeatures.length === 0
+    ) {
+      return;
+    }
+
+    console.log("Starting spatial join with Turf...");
+
+    // 各pinポイントに対してポリゴン内判定を実行
+    this.farmlandWithPolygons = this.farmlandFeatures.map((farmland) => {
+      const point = turf.point(farmland.geometry.coordinates);
+
+      // すべてのポリゴンをチェックして、ポイントが含まれるポリゴンを探す
+      let matchedPolygon: PolygonFeature | undefined;
+
+      for (const polygon of this.polygonFeatures) {
+        try {
+          if (turf.booleanPointInPolygon(point, polygon)) {
+            matchedPolygon = polygon;
+            break; // 最初にマッチしたポリゴンを使用
+          }
+        } catch (error) {
+          // ポリゴンの形状が不正な場合はスキップ
+          console.warn(
+            `Invalid polygon: ${polygon.properties.polygon_uuid}`,
+            error
+          );
+        }
+      }
+
+      return {
+        ...farmland,
+        polygon: matchedPolygon,
+      };
+    });
+
+    const matchedCount = this.farmlandWithPolygons.filter(
+      (f) => f.polygon
+    ).length;
+    console.log(
+      `Spatial join complete: ${matchedCount}/${this.farmlandFeatures.length} farmlands matched with polygons`
+    );
+  }
+
   // 農地データの取得（集落営農法人フラグ付き）
   getFarmlandsWithOwnership(): Array<
     FarmlandFeature & { isCollectiveOwned: boolean }
   > {
     return this.farmlandFeatures.map((feature) => ({
+      ...feature,
+      isCollectiveOwned: this.matchingResults.has(feature.properties.DaichoId),
+    }));
+  }
+
+  // ポリゴン付き農地データの取得（集落営農法人フラグ付き）
+  getFarmlandsWithPolygonAndOwnership(): Array<
+    FarmlandWithPolygon & { isCollectiveOwned: boolean }
+  > {
+    return this.farmlandWithPolygons.map((feature) => ({
       ...feature,
       isCollectiveOwned: this.matchingResults.has(feature.properties.DaichoId),
     }));

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Card, Modal } from "antd";
-import { FarmlandFeature } from "../types/farmland.types";
+import { FarmlandWithPolygon } from "../types/farmland.types";
 import { dataService } from "../services/dataService";
 import { formatArea } from "@/shared/lib/utils";
 
@@ -20,7 +20,7 @@ L.Icon.Default.mergeOptions({
 });
 
 interface Props {
-  farmlands: Array<FarmlandFeature & { isCollectiveOwned: boolean }>;
+  farmlands: Array<FarmlandWithPolygon & { isCollectiveOwned: boolean }>;
   loading: boolean;
   statistics: any;
   organizationStats: any[];
@@ -34,10 +34,13 @@ export default function MapContent({
 }: Props) {
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
+  const polygonsRef = useRef<L.LayerGroup | null>(null);
   const [selectedFarmland, setSelectedFarmland] = useState<any>(null);
 
   // みやま市の中心座標
-  const MIYAMA_CENTER: [number, number] = [33.1525, 130.4544];
+  const MIYAMA_CENTER: [number, number] = [
+    33.082281575000025, 130.47120210700007,
+  ];
   const DEFAULT_ZOOM = 13;
 
   useEffect(() => {
@@ -64,6 +67,9 @@ export default function MapContent({
       // マーカーグループの初期化
       markersRef.current = L.layerGroup().addTo(mapRef.current);
 
+      // ポリゴングループの初期化
+      polygonsRef.current = L.layerGroup().addTo(mapRef.current);
+
       // Leafletに地図サイズを再計算させる
       setTimeout(() => {
         mapRef.current?.invalidateSize();
@@ -75,30 +81,77 @@ export default function MapContent({
       if (markersRef.current) {
         markersRef.current.clearLayers();
       }
+      if (polygonsRef.current) {
+        polygonsRef.current.clearLayers();
+      }
     };
   }, []);
 
-  // 農地マーカーの更新
+  // 農地マーカーとポリゴンの更新
   useEffect(() => {
     if (
       !mapRef.current ||
       !markersRef.current ||
+      !polygonsRef.current ||
       loading ||
       farmlands.length === 0
     ) {
       return;
     }
 
-    // 既存のマーカーをクリア
+    // 既存のマーカーとポリゴンをクリア
     markersRef.current.clearLayers();
+    polygonsRef.current.clearLayers();
 
-    // 各農地にマーカーを追加
+    // 各農地にマーカーとポリゴンを追加
     farmlands.forEach((farmland) => {
-      const { geometry, properties, isCollectiveOwned } = farmland;
+      const { geometry, properties, isCollectiveOwned, polygon } = farmland;
       const [lng, lat] = geometry.coordinates;
 
       // 組織に基づいて色を決定
       const color = dataService.getFarmlandColor(properties.DaichoId);
+
+      // ポリゴンがある場合は描画
+      if (polygon) {
+        const polygonLayer = L.polygon(
+          polygon.geometry.coordinates[0].map((coord) => [coord[1], coord[0]]),
+          {
+            color: color,
+            fillColor: color,
+            fillOpacity: 0.3,
+            weight: 2,
+          }
+        ).on("click", () => {
+          const details = dataService.getFarmlandDetails(properties.DaichoId);
+          setSelectedFarmland(details);
+        });
+
+        // ポリゴンにもツールチップを追加
+        const tooltipContent = `
+          <div class="text-xs">
+            <div class="font-semibold">${properties.Address}</div>
+            <div class="text-gray-600">地番: ${properties.Tiban}</div>
+            <div class="text-gray-600">面積: ${formatArea(
+              properties.AreaOnRegistry
+            )}</div>
+            <div class="text-gray-600">区分: ${
+              properties.ClassificationOfLandCodeName
+            }</div>
+            ${
+              isCollectiveOwned
+                ? '<div class="text-red-600 font-semibold">集落営農法人</div>'
+                : ""
+            }
+          </div>
+        `;
+
+        polygonLayer.bindTooltip(tooltipContent, {
+          direction: "top",
+          opacity: 0.9,
+        });
+
+        polygonsRef.current?.addLayer(polygonLayer);
+      }
 
       // カスタムアイコンの作成
       const icon = L.divIcon({
@@ -153,7 +206,10 @@ export default function MapContent({
       markersRef.current?.addLayer(marker);
     });
 
-    console.log(`Added ${farmlands.length} markers to map`);
+    const polygonCount = farmlands.filter((f) => f.polygon).length;
+    console.log(
+      `Added ${farmlands.length} markers and ${polygonCount} polygons to map`
+    );
   }, [farmlands, loading]);
 
   return (

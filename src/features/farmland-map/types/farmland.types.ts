@@ -68,3 +68,30 @@ export interface MapViewState {
   center: [number, number];
   zoom: number;
 }
+
+// Polygon types
+export interface PolygonProperties {
+  polygon_uuid: string;
+  daicho_shubetsu_cd: string;
+}
+
+export interface PolygonGeometry {
+  type: "Polygon";
+  coordinates: number[][][];
+}
+
+export interface PolygonFeature {
+  type: "Feature";
+  geometry: PolygonGeometry;
+  properties: PolygonProperties;
+}
+
+export interface PolygonCollection {
+  type: "FeatureCollection";
+  features: PolygonFeature[];
+}
+
+// Combined type for farmland with polygon
+export interface FarmlandWithPolygon extends FarmlandFeature {
+  polygon?: PolygonFeature;
+}

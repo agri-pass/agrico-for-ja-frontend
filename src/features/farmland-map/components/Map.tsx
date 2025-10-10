@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { dataService } from "../services/dataService";
-import { FarmlandFeature } from "../types/farmland.types";
+import { FarmlandWithPolygon } from "../types/farmland.types";
 
 // Leafletを動的インポート（SSR回避）
 const DynamicMapContent = dynamic(() => import("./MapContent"), {
@@ -20,7 +20,7 @@ const DynamicMapContent = dynamic(() => import("./MapContent"), {
 
 export default function Map() {
   const [farmlands, setFarmlands] = useState<
-    Array<FarmlandFeature & { isCollectiveOwned: boolean }>
+    Array<FarmlandWithPolygon & { isCollectiveOwned: boolean }>
   >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,12 +32,17 @@ export default function Map() {
       try {
         setLoading(true);
 
-        // データの読み込み
-        await Promise.all([dataService.loadGeoJSON(), dataService.loadCSV()]);
+        // データの読み込み（GeoJSON, CSV, Polygon）
+        await Promise.all([
+          dataService.loadGeoJSON(),
+          dataService.loadCSV(),
+          dataService.loadPolygons(),
+        ]);
 
-        // マッチング済みデータの取得
-        const farmlandsWithOwnership = dataService.getFarmlandsWithOwnership();
-        setFarmlands(farmlandsWithOwnership);
+        // ポリゴン付きマッチング済みデータの取得
+        const farmlandsWithPolygonAndOwnership =
+          dataService.getFarmlandsWithPolygonAndOwnership();
+        setFarmlands(farmlandsWithPolygonAndOwnership);
 
         // 統計情報の取得
         const stats = dataService.getStatistics();
