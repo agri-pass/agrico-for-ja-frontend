@@ -5,6 +5,11 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Card, Modal } from "antd";
 import { FarmlandWithPolygon } from "../types/farmland.types";
+import {
+  Statistics,
+  OrganizationStatistics,
+  FarmlandDetails,
+} from "../types/statistics.types";
 import { dataService } from "../services/dataService";
 import { formatArea } from "@/shared/lib/utils";
 
@@ -22,8 +27,8 @@ L.Icon.Default.mergeOptions({
 interface Props {
   farmlands: Array<FarmlandWithPolygon & { isCollectiveOwned: boolean }>;
   loading: boolean;
-  statistics: any;
-  organizationStats: any[];
+  statistics: Statistics | null;
+  organizationStats: OrganizationStatistics[];
 }
 
 export default function MapContent({
@@ -35,7 +40,8 @@ export default function MapContent({
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
   const polygonsRef = useRef<L.LayerGroup | null>(null);
-  const [selectedFarmland, setSelectedFarmland] = useState<any>(null);
+  const [selectedFarmland, setSelectedFarmland] =
+    useState<FarmlandDetails | null>(null);
 
   // みやま市の中心座標
   const MIYAMA_CENTER: [number, number] = [

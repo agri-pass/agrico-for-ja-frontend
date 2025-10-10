@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { dataService } from "../services/dataService";
 import { FarmlandWithPolygon } from "../types/farmland.types";
+import {
+  Statistics,
+  OrganizationStatistics,
+} from "../types/statistics.types";
 
 // Leafletを動的インポート（SSR回避）
 const DynamicMapContent = dynamic(() => import("./MapContent"), {
@@ -24,8 +28,10 @@ export default function Map() {
   >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [statistics, setStatistics] = useState<any>(null);
-  const [organizationStats, setOrganizationStats] = useState<any[]>([]);
+  const [statistics, setStatistics] = useState<Statistics | null>(null);
+  const [organizationStats, setOrganizationStats] = useState<
+    OrganizationStatistics[]
+  >([]);
 
   useEffect(() => {
     const loadData = async () => {
