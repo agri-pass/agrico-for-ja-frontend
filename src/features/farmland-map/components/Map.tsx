@@ -39,15 +39,25 @@ export default function Map() {
         setLoading(true);
 
         // データの読み込み（GeoJSON, CSV, Polygon）
+        // 空間結合は遅延実行されるため、初期ロードが高速化
         await Promise.all([
           dataService.loadGeoJSON(),
           dataService.loadCSV(),
           dataService.loadPolygons(),
         ]);
 
+        // 空間結合を実行（ポリゴン表示のため）
+        // 注: この処理は重いため、必要に応じてコメントアウト可能
+        console.log("Executing spatial join...");
+        dataService.executeSpatialJoin();
+
         // ポリゴン付きマッチング済みデータの取得
         const farmlandsWithPolygonAndOwnership =
           dataService.getFarmlandsWithPolygonAndOwnership();
+        console.log("Farmlands with polygons:", {
+          total: farmlandsWithPolygonAndOwnership.length,
+          withPolygon: farmlandsWithPolygonAndOwnership.filter(f => f.polygon).length,
+        });
         setFarmlands(farmlandsWithPolygonAndOwnership);
 
         // 統計情報の取得

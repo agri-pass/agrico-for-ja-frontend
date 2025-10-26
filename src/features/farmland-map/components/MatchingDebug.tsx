@@ -40,8 +40,8 @@ export default function MatchingDebug() {
         }))
       );
 
-      // CSVデータを直接読み込み
-      const response = await fetch("/data/ex_owned_farmland.csv");
+      // CSVデータを直接読み込み（現在使用中のCSVファイル）
+      const response = await fetch("/data/hinashiro_owned_farmland.csv");
       const csvText = await response.text();
       const parsedCSV = parseOwnedFarmlandCSV(csvText);
       setCsvData(parsedCSV);

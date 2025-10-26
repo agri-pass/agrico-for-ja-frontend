@@ -21,17 +21,24 @@ export class DataService {
   private farmlandWithPolygons: FarmlandWithPolygon[] = [];
 
   // GeoJSONデータの読み込み
-  async loadGeoJSON(path: string = "/data/pin.geojson"): Promise<void> {
+  async loadGeoJSON(
+    path: string = "/data/hinashiro_pin.geojson"
+  ): Promise<void> {
     try {
+      console.log(`Loading GeoJSON from: ${path}`);
       const response = await fetch(path);
-      const data: FarmlandCollection = await response.json();
+
+      // 大きなJSONの場合、段階的にパース
+      const text = await response.text();
+      const data: FarmlandCollection = JSON.parse(text);
+
       this.farmlandFeatures = data.features;
       console.log(`Loaded ${this.farmlandFeatures.length} farmland features`);
 
       // マッチング処理を実行
       this.performMatching();
-      // 空間結合を実行
-      this.performSpatialJoin();
+      // 空間結合は遅延実行（必要に応じて呼び出す）
+      // this.performSpatialJoin();
     } catch (error) {
       console.error("Failed to load GeoJSON:", error);
       throw error;
@@ -39,7 +46,9 @@ export class DataService {
   }
 
   // Polygonデータの読み込み
-  async loadPolygons(path: string = "/data/polygon.geojson"): Promise<void> {
+  async loadPolygons(
+    path: string = "/data/hinashiro_polygon.geojson"
+  ): Promise<void> {
     try {
       console.log(`Loading polygon data from: ${path}`);
       const response = await fetch(path);
@@ -50,14 +59,14 @@ export class DataService {
 
       const text = await response.text();
       // BOMを削除
-      const cleanText = text.replace(/^\uFEFF/, '');
+      const cleanText = text.replace(/^\uFEFF/, "");
       const data: PolygonCollection = JSON.parse(cleanText);
 
       this.polygonFeatures = data.features;
       console.log(`Loaded ${this.polygonFeatures.length} polygon features`);
 
-      // 空間結合を実行
-      this.performSpatialJoin();
+      // 空間結合は遅延実行（必要に応じて呼び出す）
+      // this.performSpatialJoin();
     } catch (error) {
       console.error("Failed to load Polygon GeoJSON:", error);
       throw error;
@@ -65,7 +74,9 @@ export class DataService {
   }
 
   // CSVデータの読み込み
-  async loadCSV(path: string = "/data/ex_owned_farmland.csv"): Promise<void> {
+  async loadCSV(
+    path: string = "/data/hinashiro_owned_farmland.csv"
+  ): Promise<void> {
     try {
       const response = await fetch(path);
       const csvText = await response.text();
@@ -153,6 +164,13 @@ export class DataService {
     );
   }
 
+  // 空間結合を明示的に実行（ポリゴン表示が必要な場合のみ）
+  public executeSpatialJoin(): void {
+    if (this.farmlandWithPolygons.length === 0) {
+      this.performSpatialJoin();
+    }
+  }
+
   // 農地データの取得（集落営農法人フラグ付き）
   getFarmlandsWithOwnership(): Array<
     FarmlandFeature & { isCollectiveOwned: boolean }
@@ -167,6 +185,23 @@ export class DataService {
   getFarmlandsWithPolygonAndOwnership(): Array<
     FarmlandWithPolygon & { isCollectiveOwned: boolean }
   > {
+    // 空間結合が実行されていない場合は、ポリゴンなしで返す
+    if (
+      this.farmlandWithPolygons.length === 0 &&
+      this.farmlandFeatures.length > 0
+    ) {
+      console.log(
+        "Spatial join not executed, returning farmlands without polygons"
+      );
+      return this.farmlandFeatures.map((feature) => ({
+        ...feature,
+        polygon: undefined,
+        isCollectiveOwned: this.matchingResults.has(
+          feature.properties.DaichoId
+        ),
+      }));
+    }
+
     return this.farmlandWithPolygons.map((feature) => ({
       ...feature,
       isCollectiveOwned: this.matchingResults.has(feature.properties.DaichoId),
@@ -246,7 +281,7 @@ export class DataService {
   getFarmlandColor(daichoId: string): string {
     const matchedCSV = this.matchingResults.get(daichoId);
     if (!matchedCSV) {
-      return "#4ECDC4"; // デフォルト色（その他農地）
+      return "#FFFFFF"; // デフォルト色（その他農地）
     }
 
     // 組織別の色を取得

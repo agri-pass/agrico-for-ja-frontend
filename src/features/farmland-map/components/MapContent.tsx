@@ -37,67 +37,231 @@ export default function MapContent({
   statistics,
   organizationStats,
 }: Props) {
+  const DEFAULT_ZOOM = 13; // ポリゴンが見えるズームレベルで開始
+  const POLYGON_ZOOM_THRESHOLD = 12; // ポリゴンを表示する最小ズームレベル（さらに下げました）
+
   const mapRef = useRef<L.Map | null>(null);
-  const markersRef = useRef<L.LayerGroup | null>(null);
+  const markerClusterRef = useRef<L.MarkerClusterGroup | null>(null);
   const polygonsRef = useRef<L.LayerGroup | null>(null);
+  const unmatchedPolygonsRef = useRef<L.LayerGroup | null>(null);
+  const initializingRef = useRef(false);
   const [selectedFarmland, setSelectedFarmland] =
     useState<FarmlandDetails | null>(null);
+  const [renderProgress, setRenderProgress] = useState(100);
+  const [mapInitialized, setMapInitialized] = useState(false);
+  const [currentZoom, setCurrentZoom] = useState(DEFAULT_ZOOM);
+  const [showPins, setShowPins] = useState(true);
+  const [showPolygons, setShowPolygons] = useState(true);
+  const [showUnmatchedPolygons, setShowUnmatchedPolygons] = useState(false);
 
   // みやま市の中心座標
   const MIYAMA_CENTER: [number, number] = [
     33.082281575000025, 130.47120210700007,
   ];
-  const DEFAULT_ZOOM = 13;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     // 地図の初期化
-    if (!mapRef.current) {
-      mapRef.current = L.map("map", {
-        center: MIYAMA_CENTER,
-        zoom: DEFAULT_ZOOM,
-        zoomControl: true,
-      });
+    const initMap = async () => {
+      // 既に初期化中または初期化済みの場合はスキップ
+      if (initializingRef.current || mapRef.current) return;
 
-      // 航空写真タイルレイヤーの追加（Esri World Imagery）
-      L.tileLayer(
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        {
-          attribution:
-            '© <a href="https://www.esri.com/">Esri</a>, © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-          maxZoom: 19,
-        }
-      ).addTo(mapRef.current);
+      initializingRef.current = true;
 
-      // マーカーグループの初期化
-      markersRef.current = L.layerGroup().addTo(mapRef.current);
+      try {
+        // leaflet.markerclusterを動的にインポート
+        await import("leaflet.markercluster/dist/MarkerCluster.css");
+        await import("leaflet.markercluster/dist/MarkerCluster.Default.css");
+        await import("leaflet.markercluster");
 
-      // ポリゴングループの初期化
-      polygonsRef.current = L.layerGroup().addTo(mapRef.current);
+        // 再度チェック（非同期処理中に他の初期化が走った可能性）
+        if (mapRef.current) return;
 
-      // Leafletに地図サイズを再計算させる
-      setTimeout(() => {
-        mapRef.current?.invalidateSize();
-      }, 100);
-    }
+        mapRef.current = L.map("map", {
+          center: MIYAMA_CENTER,
+          zoom: DEFAULT_ZOOM,
+          zoomControl: true,
+        });
+
+        // 航空写真タイルレイヤーの追加（Esri World Imagery）
+        L.tileLayer(
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+          {
+            attribution:
+              '© <a href="https://www.esri.com/">Esri</a>, © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            maxZoom: 19,
+          }
+        ).addTo(mapRef.current);
+
+        // マーカークラスタグループの初期化
+        markerClusterRef.current = L.markerClusterGroup({
+          chunkedLoading: true, // 段階的読み込みを有効化
+          chunkInterval: 200, // マーカー追加の間隔（ms）
+          chunkDelay: 50, // チャンク間の遅延（ms）
+          maxClusterRadius: 50, // クラスタの最大半径を小さく（広域でも個別ピンが見えやすい）
+          disableClusteringAtZoom: 14, // ズーム14以上でクラスタリング解除
+          spiderfyOnMaxZoom: true, // 最大ズーム時にスパイダー表示
+          showCoverageOnHover: true, // ホバー時にカバレッジエリアを表示
+          zoomToBoundsOnClick: true, // クリック時にズーム
+          // クラスタアイコンのカスタマイズ
+          iconCreateFunction: function (cluster) {
+            const count = cluster.getChildCount();
+            let size = "small";
+            let className = "marker-cluster-";
+
+            if (count < 10) {
+              size = "small";
+              className += "small";
+            } else if (count < 100) {
+              size = "medium";
+              className += "medium";
+            } else {
+              size = "large";
+              className += "large";
+            }
+
+            return L.divIcon({
+              html: `<div><span>${count}</span></div>`,
+              className: "marker-cluster " + className,
+              iconSize: L.point(40, 40),
+            });
+          },
+        });
+        mapRef.current.addLayer(markerClusterRef.current);
+
+        // ポリゴングループの初期化
+        polygonsRef.current = L.layerGroup().addTo(mapRef.current);
+
+        // マッチしなかったポリゴングループの初期化
+        unmatchedPolygonsRef.current = L.layerGroup();
+
+        // ズームイベントでポリゴンの表示/非表示を制御
+        mapRef.current.on("zoomend", () => {
+          const zoom = mapRef.current?.getZoom() || 0;
+          setCurrentZoom(zoom); // ズームレベルを更新
+          if (polygonsRef.current) {
+            if (zoom >= POLYGON_ZOOM_THRESHOLD) {
+              if (!mapRef.current?.hasLayer(polygonsRef.current)) {
+                mapRef.current?.addLayer(polygonsRef.current);
+              }
+            } else {
+              if (mapRef.current?.hasLayer(polygonsRef.current)) {
+                mapRef.current?.removeLayer(polygonsRef.current);
+              }
+            }
+          }
+        });
+
+        // Leafletに地図サイズを再計算させる
+        setTimeout(() => {
+          mapRef.current?.invalidateSize();
+          const zoom = mapRef.current?.getZoom() || 0;
+          setCurrentZoom(zoom);
+          console.log(`Map initialized with zoom: ${zoom}`);
+          setMapInitialized(true);
+        }, 100);
+      } catch (error) {
+        console.error("Failed to initialize map:", error);
+        initializingRef.current = false;
+      }
+    };
+
+    // 地図を初期化
+    initMap();
 
     // クリーンアップ関数
     return () => {
-      if (markersRef.current) {
-        markersRef.current.clearLayers();
+      if (markerClusterRef.current) {
+        markerClusterRef.current.clearLayers();
       }
       if (polygonsRef.current) {
         polygonsRef.current.clearLayers();
       }
+      if (unmatchedPolygonsRef.current) {
+        unmatchedPolygonsRef.current.clearLayers();
+      }
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+      initializingRef.current = false;
     };
   }, []);
 
-  // 農地マーカーとポリゴンの更新
+  // マッチしなかったポリゴンを表示するuseEffect
   useEffect(() => {
+    if (!mapRef.current || !unmatchedPolygonsRef.current || !mapInitialized) {
+      return;
+    }
+
+    const currentZoom = mapRef.current.getZoom() || 0;
+
+    if (showUnmatchedPolygons && currentZoom >= POLYGON_ZOOM_THRESHOLD) {
+      // 全てのポリゴンを取得してマッチしていないものを表示
+      import('../services/dataService').then(({ dataService }) => {
+        const allPolygons = (dataService as any).polygonFeatures || [];
+        const matchedPolygonIds = new Set(
+          farmlands.filter(f => f.polygon).map(f => f.polygon?.properties.polygon_uuid)
+        );
+
+        unmatchedPolygonsRef.current?.clearLayers();
+
+        allPolygons.forEach((polygon: any) => {
+          if (!matchedPolygonIds.has(polygon.properties.polygon_uuid)) {
+            const polygonLayer = L.polygon(
+              polygon.geometry.coordinates[0].map((coord: number[]) => [coord[1], coord[0]]),
+              {
+                color: '#888888',
+                fillColor: '#888888',
+                fillOpacity: 0.2,
+                weight: 1,
+                dashArray: '5, 5',
+              }
+            );
+
+            const tooltipContent = `
+              <div class="text-xs">
+                <div class="font-semibold text-gray-600">未マッチポリゴン</div>
+                <div class="text-gray-500">ID: ${polygon.properties.polygon_uuid || 'N/A'}</div>
+              </div>
+            `;
+
+            polygonLayer.bindTooltip(tooltipContent, {
+              direction: "top",
+              opacity: 0.9,
+            });
+
+            unmatchedPolygonsRef.current?.addLayer(polygonLayer);
+          }
+        });
+
+        if (!mapRef.current?.hasLayer(unmatchedPolygonsRef.current)) {
+          mapRef.current?.addLayer(unmatchedPolygonsRef.current);
+        }
+      });
+    } else {
+      if (mapRef.current?.hasLayer(unmatchedPolygonsRef.current)) {
+        mapRef.current?.removeLayer(unmatchedPolygonsRef.current);
+      }
+    }
+  }, [showUnmatchedPolygons, mapInitialized, farmlands]);
+
+  // 農地マーカーとポリゴンの更新（段階的レンダリング）
+  useEffect(() => {
+    console.log("Marker effect check:", {
+      mapInitialized,
+      hasMap: !!mapRef.current,
+      hasCluster: !!markerClusterRef.current,
+      hasPolygons: !!polygonsRef.current,
+      loading,
+      farmlandsCount: farmlands.length,
+    });
+
     if (
+      !mapInitialized ||
       !mapRef.current ||
-      !markersRef.current ||
+      !markerClusterRef.current ||
       !polygonsRef.current ||
       loading ||
       farmlands.length === 0
@@ -105,34 +269,121 @@ export default function MapContent({
       return;
     }
 
+    console.log(`Starting to render ${farmlands.length} farmlands`);
+
     // 既存のマーカーとポリゴンをクリア
-    markersRef.current.clearLayers();
+    markerClusterRef.current.clearLayers();
     polygonsRef.current.clearLayers();
+    setRenderProgress(0);
 
-    // 各農地にマーカーとポリゴンを追加
-    farmlands.forEach((farmland) => {
-      const { geometry, properties, isCollectiveOwned, polygon } = farmland;
-      const [lng, lat] = geometry.coordinates;
+    const BATCH_SIZE = 500; // 一度に処理するマーカー数
+    let currentIndex = 0;
+    let cancelled = false;
 
-      // 組織に基づいて色を決定
-      const color = dataService.getFarmlandColor(properties.DaichoId);
+    // 段階的にマーカーとポリゴンを追加する関数
+    const addBatch = () => {
+      if (cancelled) return;
 
-      // ポリゴンがある場合は描画
-      if (polygon) {
-        const polygonLayer = L.polygon(
-          polygon.geometry.coordinates[0].map((coord) => [coord[1], coord[0]]),
-          {
-            color: color,
-            fillColor: color,
-            fillOpacity: 0.3,
-            weight: 2,
-          }
-        ).on("click", () => {
+      const endIndex = Math.min(currentIndex + BATCH_SIZE, farmlands.length);
+      const batch = farmlands.slice(currentIndex, endIndex);
+
+      const markers: L.Marker[] = [];
+      const currentZoom = mapRef.current?.getZoom() || 0;
+      const shouldShowPolygons = showPolygons && currentZoom >= POLYGON_ZOOM_THRESHOLD;
+      let polygonAddedCount = 0;
+
+      batch.forEach((farmland, index) => {
+        const { geometry, properties, isCollectiveOwned, polygon } = farmland;
+        const [lng, lat] = geometry.coordinates;
+
+        // デバッグ: 最初の数件でポリゴン情報をログ出力
+        if (currentIndex === 0 && index < 3) {
+          console.log(`Farmland ${index}:`, {
+            hasPolygon: !!polygon,
+            shouldShowPolygons,
+            currentZoom,
+            threshold: POLYGON_ZOOM_THRESHOLD,
+          });
+        }
+
+        // 組織に基づいて色を決定
+        const color = dataService.getFarmlandColor(properties.DaichoId);
+
+        // ポリゴンがある場合は描画（ズームレベルが十分な場合のみ）
+        if (polygon && shouldShowPolygons) {
+          polygonAddedCount++;
+          const polygonLayer = L.polygon(
+            polygon.geometry.coordinates[0].map((coord) => [
+              coord[1],
+              coord[0],
+            ]),
+            {
+              color: color,
+              fillColor: color,
+              fillOpacity: 0.3,
+              weight: 2,
+            }
+          ).on("click", () => {
+            const details = dataService.getFarmlandDetails(properties.DaichoId);
+            setSelectedFarmland(details);
+          });
+
+          // ポリゴンにもツールチップを追加
+          const tooltipContent = `
+            <div class="text-xs">
+              <div class="font-semibold">${properties.Address}</div>
+              <div class="text-gray-600">地番: ${properties.Tiban}</div>
+              <div class="text-gray-600">面積: ${formatArea(
+                properties.AreaOnRegistry
+              )}</div>
+              <div class="text-gray-600">区分: ${
+                properties.ClassificationOfLandCodeName
+              }</div>
+              ${
+                isCollectiveOwned
+                  ? '<div class="text-red-600 font-semibold">集落営農法人</div>'
+                  : ""
+              }
+            </div>
+          `;
+
+          polygonLayer.bindTooltip(tooltipContent, {
+            direction: "top",
+            opacity: 0.9,
+          });
+
+          polygonsRef.current?.addLayer(polygonLayer);
+        }
+
+        // カスタムアイコンの作成
+        const icon = L.divIcon({
+          html: `
+            <div style="
+              background-color: ${color};
+              width: 12px;
+              height: 12px;
+              border-radius: 50%;
+              border: 2px solid white;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+              ${
+                isCollectiveOwned
+                  ? "border-width: 3px; border-color: #000;"
+                  : ""
+              }
+            "></div>
+          `,
+          className: "custom-farmland-marker",
+          iconSize: [16, 16],
+          iconAnchor: [8, 8],
+        });
+
+        // マーカーを作成
+        const marker = L.marker([lat, lng], { icon }).on("click", () => {
           const details = dataService.getFarmlandDetails(properties.DaichoId);
           setSelectedFarmland(details);
         });
 
-        // ポリゴンにもツールチップを追加
+        // ツールチップの追加
         const tooltipContent = `
           <div class="text-xs">
             <div class="font-semibold">${properties.Address}</div>
@@ -151,72 +402,44 @@ export default function MapContent({
           </div>
         `;
 
-        polygonLayer.bindTooltip(tooltipContent, {
+        marker.bindTooltip(tooltipContent, {
           direction: "top",
+          offset: [0, -10],
           opacity: 0.9,
         });
 
-        polygonsRef.current?.addLayer(polygonLayer);
+        markers.push(marker);
+      });
+
+      // バッチでマーカーを追加（表示設定に応じて）
+      if (showPins) {
+        markerClusterRef.current?.addLayers(markers);
       }
 
-      // カスタムアイコンの作成
-      const icon = L.divIcon({
-        html: `
-          <div style="
-            background-color: ${color};
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            border: 2px solid white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-            ${isCollectiveOwned ? "border-width: 3px; border-color: #000;" : ""}
-          "></div>
-        `,
-        className: "custom-farmland-marker",
-        iconSize: [16, 16],
-        iconAnchor: [8, 8],
-      });
+      currentIndex = endIndex;
+      const progress = Math.round((currentIndex / farmlands.length) * 100);
+      setRenderProgress(progress);
 
-      // マーカーを作成
-      const marker = L.marker([lat, lng], { icon }).on("click", () => {
-        const details = dataService.getFarmlandDetails(properties.DaichoId);
-        setSelectedFarmland(details);
-      });
+      // 次のバッチを処理
+      if (currentIndex < farmlands.length) {
+        requestAnimationFrame(addBatch);
+      } else {
+        const polygonCount = farmlands.filter((f) => f.polygon).length;
+        const totalPolygonsAdded = polygonsRef.current?.getLayers().length || 0;
+        console.log(
+          `Rendering complete: ${farmlands.length} markers, ${polygonCount} have polygon data, ${totalPolygonsAdded} polygons actually added to map (zoom: ${currentZoom}, threshold: ${POLYGON_ZOOM_THRESHOLD})`
+        );
+      }
+    };
 
-      // ツールチップの追加
-      const tooltipContent = `
-        <div class="text-xs">
-          <div class="font-semibold">${properties.Address}</div>
-          <div class="text-gray-600">地番: ${properties.Tiban}</div>
-          <div class="text-gray-600">面積: ${formatArea(
-            properties.AreaOnRegistry
-          )}</div>
-          <div class="text-gray-600">区分: ${
-            properties.ClassificationOfLandCodeName
-          }</div>
-          ${
-            isCollectiveOwned
-              ? '<div class="text-red-600 font-semibold">集落営農法人</div>'
-              : ""
-          }
-        </div>
-      `;
+    // 最初のバッチを処理
+    requestAnimationFrame(addBatch);
 
-      marker.bindTooltip(tooltipContent, {
-        direction: "top",
-        offset: [0, -10],
-        opacity: 0.9,
-      });
-
-      // マーカーグループに追加
-      markersRef.current?.addLayer(marker);
-    });
-
-    const polygonCount = farmlands.filter((f) => f.polygon).length;
-    console.log(
-      `Added ${farmlands.length} markers and ${polygonCount} polygons to map`
-    );
-  }, [farmlands, loading]);
+    // クリーンアップ
+    return () => {
+      cancelled = true;
+    };
+  }, [farmlands, loading, mapInitialized, showPins, showPolygons]);
 
   return (
     <div className="relative w-full h-full">
@@ -226,8 +449,103 @@ export default function MapContent({
         style={{ width: "100%", height: "100%" }}
       />
 
+      {/* ズームレベル表示 */}
+      <div
+        style={{
+          position: "absolute",
+          top: 16,
+          left: 16,
+          zIndex: 1000,
+          backgroundColor: "white",
+          padding: "8px 12px",
+          borderRadius: "4px",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+        }}
+      >
+        <div className="text-sm font-semibold">
+          ズーム: {currentZoom.toFixed(1)}
+        </div>
+        <div className="text-xs text-gray-600">
+          {currentZoom >= POLYGON_ZOOM_THRESHOLD
+            ? "ポリゴン表示中"
+            : `ポリゴン: ズーム${POLYGON_ZOOM_THRESHOLD}以上で表示`}
+        </div>
+      </div>
+
+      {/* 表示切り替えコントロール */}
+      <div
+        style={{
+          position: "absolute",
+          top: 100,
+          left: 16,
+          zIndex: 1000,
+          backgroundColor: "white",
+          padding: "12px",
+          borderRadius: "4px",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+        }}
+      >
+        <div className="text-sm font-semibold mb-2">表示設定</div>
+        <div className="space-y-2">
+          <label className="flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showPins}
+              onChange={(e) => setShowPins(e.target.checked)}
+              className="mr-2 w-4 h-4"
+            />
+            <span className="text-sm">ピンを表示</span>
+          </label>
+          <label className="flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showPolygons}
+              onChange={(e) => setShowPolygons(e.target.checked)}
+              className="mr-2 w-4 h-4"
+            />
+            <span className="text-sm">ポリゴンを表示</span>
+          </label>
+          <label className="flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showUnmatchedPolygons}
+              onChange={(e) => setShowUnmatchedPolygons(e.target.checked)}
+              className="mr-2 w-4 h-4"
+            />
+            <span className="text-sm text-gray-600">未マッチポリゴン</span>
+          </label>
+        </div>
+      </div>
+
+      {/* レンダリング進捗表示 */}
+      {renderProgress > 0 && renderProgress < 100 && (
+        <Card
+          style={{
+            position: "absolute",
+            top: 16,
+            right: 16,
+            width: 280,
+            zIndex: 1000,
+          }}
+          size="small"
+        >
+          <div className="text-sm">
+            <div className="mb-2">マーカーを読み込み中...</div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${renderProgress}%` }}
+              ></div>
+            </div>
+            <div className="text-xs text-gray-600 mt-1 text-right">
+              {renderProgress}%
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* 統計情報（画面右上） */}
-      {statistics && !loading && (
+      {statistics && !loading && renderProgress === 100 && (
         <Card
           title="統計情報"
           style={{
