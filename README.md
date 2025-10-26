@@ -1,36 +1,223 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 農地管理システム
 
-## Getting Started
+みやま市の農地管理システムのフロントエンドアプリケーション。集落営農法人が所有する農地をLeaflet地図上に可視化し、統計情報を表示します。
 
-First, run the development server:
+## 機能
+
+- **ファイルアップロード**: GeoJSON（農地ピン・ポリゴン）とCSV（耕作者データ）をアップロード
+- **地図表示**: Leafletを使用した航空写真地図
+- **マーカークラスタリング**: 大量のピン（24MB+）を高速表示
+- **組織別色分け**: 集落営農法人ごとに色分けして表示
+- **統計情報**: 農地数、面積、マッチング率などを表示
+- **ポリゴン表示**: ズームレベルに応じてポリゴンを表示/非表示
+
+## 技術スタック
+
+- Next.js 14 (App Router)
+- TypeScript
+- Leaflet 1.9.4 + Marker Cluster
+- Ant Design
+- Tailwind CSS
+- Turf.js（地理空間計算）
+
+## セットアップ
+
+### 依存関係のインストール
+
+```bash
+npm install
+```
+
+### 開発サーバーの起動
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+開発サーバーは `http://localhost:8000` で起動します。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### ビルド
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+```
 
-## Learn More
+### 本番サーバーの起動
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm start
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Vercelへのデプロイ
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 前提条件
 
-## Deploy on Vercel
+- [Vercelアカウント](https://vercel.com/signup)
+- Git リポジトリ（GitHub, GitLab, Bitbucket）
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 方法1: GitHub連携（推奨）
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. **GitHubにプッシュ**
+
+```bash
+git add .
+git commit -m "Initial commit"
+git push origin main
+```
+
+2. **Vercelにログイン**
+   - https://vercel.com にアクセス
+   - GitHubアカウントでログイン
+
+3. **プロジェクトをインポート**
+   - 「Add New...」→「Project」をクリック
+   - GitHubリポジトリを選択
+   - 「Import」をクリック
+
+4. **プロジェクト設定**
+   - **Framework Preset**: Next.js（自動検出）
+   - **Root Directory**: `./`
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `.next`
+   - **Install Command**: `npm install`
+
+   ※ すべて自動設定されるため、変更不要です
+
+5. **デプロイ**
+   - 「Deploy」をクリック
+   - ビルド完了まで1-3分待つ
+   - 完了すると自動的にURLが発行されます
+
+### 方法2: Vercel CLI
+
+1. **Vercel CLIのインストール**
+
+```bash
+npm install -g vercel
+```
+
+2. **ログイン**
+
+```bash
+vercel login
+```
+
+3. **デプロイ**
+
+```bash
+# プレビュー環境にデプロイ
+vercel
+
+# 本番環境にデプロイ
+vercel --prod
+```
+
+### 自動デプロイ
+
+GitHub連携している場合、以下のブランチにpushすると自動デプロイされます：
+
+- `main` ブランチ → 本番環境
+- その他のブランチ → プレビュー環境（PR毎に一意のURL）
+
+## セキュリティ
+
+このアプリケーションは**完全にクライアントサイド**で動作します：
+
+✅ **安全な点**
+- アップロードされたファイルはブラウザのメモリ内でのみ処理
+- サーバーにファイルは送信されません
+- 他のユーザーがデータを見ることはできません
+- ページリロードでデータは消去されます
+
+🔒 **セキュリティヘッダー**（`vercel.json`で設定済み）
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `X-XSS-Protection: 1; mode=block`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy: camera=(), microphone=(), geolocation=()`
+
+## 使用方法
+
+### 1. ファイルのアップロード
+
+アプリケーションにアクセスすると、ファイルアップロード画面が表示されます。
+
+以下の3つのファイルを選択：
+
+1. **農地ピン（GeoJSON）**: 農地の位置情報
+2. **ポリゴン（GeoJSON）**: 農地の境界情報
+3. **耕作者データ（CSV）**: 集落営農法人の所有情報
+
+「データを読み込む」ボタンをクリック
+
+### 2. 地図の操作
+
+- **ズーム**: マウスホイール or ズームボタン
+- **パン**: ドラッグして移動
+- **マーカークリック**: 農地詳細を表示
+- **クラスタクリック**: ズームイン
+
+### 3. 表示切り替え
+
+地図左側のチェックボックス：
+
+- ✅ ピン表示
+- ✅ ポリゴン表示
+- ✅ 未マッチポリゴン表示
+
+### 4. 統計情報
+
+画面右上に表示：
+
+- 総農地数
+- 集落営農法人数
+- 組織別の件数と割合
+- マッチング率
+
+## トラブルシューティング
+
+### ビルドエラー
+
+```bash
+# キャッシュクリア
+rm -rf node_modules .next
+npm install
+npm run build
+```
+
+### 地図が表示されない
+
+1. ブラウザの開発者ツール（F12）でエラー確認
+2. ファイル形式を確認（GeoJSON, CSV）
+3. ファイルサイズを確認（推奨: 50MB以下）
+
+### Vercelデプロイエラー
+
+1. ビルドログを確認
+2. ローカルで `npm run build` が成功するか確認
+3. `vercel.json` の設定を確認
+
+## プロジェクト構造
+
+```
+src/
+├── app/                    # Next.js App Router
+│   ├── page.tsx           # トップページ（地図表示）
+│   ├── add-pin/           # ピン追加ページ
+│   └── debug/             # マッチングデバッグ
+├── features/              # 機能別モジュール
+│   └── farmland-map/      # 農地地図機能
+│       ├── components/    # Reactコンポーネント
+│       ├── services/      # データサービス層
+│       ├── lib/          # ビジネスロジック
+│       └── types/        # TypeScript型定義
+└── shared/               # 共有コード
+```
+
+## ライセンス
+
+Private
+
+## サポート
+
+問題がある場合は、GitHubのIssuesで報告してください。

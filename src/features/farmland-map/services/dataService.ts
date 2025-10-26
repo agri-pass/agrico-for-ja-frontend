@@ -93,6 +93,69 @@ export class DataService {
     }
   }
 
+  // ファイルからGeoJSONデータを読み込み
+  async loadGeoJSONFromFile(file: File): Promise<void> {
+    try {
+      console.log(`Loading GeoJSON from file: ${file.name}`);
+      const text = await file.text();
+      const data: FarmlandCollection = JSON.parse(text);
+
+      this.farmlandFeatures = data.features;
+      console.log(`Loaded ${this.farmlandFeatures.length} farmland features from file`);
+
+      // マッチング処理を実行
+      this.performMatching();
+    } catch (error) {
+      console.error("Failed to load GeoJSON from file:", error);
+      throw error;
+    }
+  }
+
+  // ファイルからPolygonデータを読み込み
+  async loadPolygonsFromFile(file: File): Promise<void> {
+    try {
+      console.log(`Loading polygon data from file: ${file.name}`);
+      const text = await file.text();
+      // BOMを削除
+      const cleanText = text.replace(/^\uFEFF/, "");
+      const data: PolygonCollection = JSON.parse(cleanText);
+
+      this.polygonFeatures = data.features;
+      console.log(`Loaded ${this.polygonFeatures.length} polygon features from file`);
+    } catch (error) {
+      console.error("Failed to load Polygon GeoJSON from file:", error);
+      throw error;
+    }
+  }
+
+  // ファイルからCSVデータを読み込み
+  async loadCSVFromFile(file: File): Promise<void> {
+    try {
+      console.log(`Loading CSV from file: ${file.name}`);
+      const csvText = await file.text();
+      this.ownedFarmlandCSV = parseOwnedFarmlandCSV(csvText);
+      console.log(
+        `Loaded ${this.ownedFarmlandCSV.length} owned farmland records from file`
+      );
+
+      // マッチング処理を実行
+      this.performMatching();
+    } catch (error) {
+      console.error("Failed to load CSV from file:", error);
+      throw error;
+    }
+  }
+
+  // データのリセット（新しいファイルをアップロードする前にクリア）
+  resetData(): void {
+    this.farmlandFeatures = [];
+    this.polygonFeatures = [];
+    this.ownedFarmlandCSV = [];
+    this.matchingResults = new Map();
+    this.farmlandWithPolygons = [];
+    console.log("Data reset completed");
+  }
+
   // マッチング処理（統一されたロジックを使用）
   private performMatching(): void {
     if (

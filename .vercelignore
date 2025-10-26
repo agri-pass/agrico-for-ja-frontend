@@ -1,0 +1,30 @@
+# 開発環境のみで使用するファイル
+.env*.local
+*.log
+
+# テストファイル
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+__tests__/
+coverage/
+
+# ドキュメント
+docs/
+*.md
+!README.md
+
+# エディタ設定
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Mac OS
+.DS_Store
+
+# 開発用のデータファイル（ユーザーがアップロードする仕組みなので）
+/public/data/*.csv
+/public/data/*.geojson

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { dataService } from "../services/dataService";
 import { FarmlandWithPolygon } from "../types/farmland.types";
@@ -8,6 +8,7 @@ import {
   Statistics,
   OrganizationStatistics,
 } from "../types/statistics.types";
+import FileUpload from "./FileUpload";
 
 // Leafletを動的インポート（SSR回避）
 const DynamicMapContent = dynamic(() => import("./MapContent"), {
@@ -26,62 +27,87 @@ export default function Map() {
   const [farmlands, setFarmlands] = useState<
     Array<FarmlandWithPolygon & { isCollectiveOwned: boolean }>
   >([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [organizationStats, setOrganizationStats] = useState<
     OrganizationStatistics[]
   >([]);
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const [showFileUpload, setShowFileUpload] = useState(true);
 
-  useEffect(() => {
-    const loadData = async () => {
+  const loadDataFromService = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // 空間結合を実行（ポリゴン表示のため）
+      console.log("Executing spatial join...");
+      dataService.executeSpatialJoin();
+
+      // ポリゴン付きマッチング済みデータの取得
+      const farmlandsWithPolygonAndOwnership =
+        dataService.getFarmlandsWithPolygonAndOwnership();
+      console.log("Farmlands with polygons:", {
+        total: farmlandsWithPolygonAndOwnership.length,
+        withPolygon: farmlandsWithPolygonAndOwnership.filter((f) => f.polygon)
+          .length,
+      });
+      setFarmlands(farmlandsWithPolygonAndOwnership);
+
+      // 統計情報の取得
+      const stats = dataService.getStatistics();
+      setStatistics(stats);
+
+      // 組織別統計の取得
+      const orgStats = dataService.getOrganizationStatistics();
+      setOrganizationStats(orgStats);
+
+      console.log("Data loaded successfully:", stats);
+      console.log("Organization stats:", orgStats);
+
+      setDataLoaded(true);
+      setShowFileUpload(false);
+    } catch (err) {
+      console.error("Failed to load data:", err);
+      setError(
+        err instanceof Error ? err.message : "データの読み込みに失敗しました"
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleLoadFromFiles = useCallback(
+    async (pinFile: File, polygonFile: File, csvFile: File) => {
       try {
         setLoading(true);
+        setError(null);
 
-        // データの読み込み（GeoJSON, CSV, Polygon）
-        // 空間結合は遅延実行されるため、初期ロードが高速化
+        // データをリセット
+        dataService.resetData();
+
+        // ファイルからデータを読み込み
         await Promise.all([
-          dataService.loadGeoJSON(),
-          dataService.loadCSV(),
-          dataService.loadPolygons(),
+          dataService.loadGeoJSONFromFile(pinFile),
+          dataService.loadPolygonsFromFile(polygonFile),
+          dataService.loadCSVFromFile(csvFile),
         ]);
 
-        // 空間結合を実行（ポリゴン表示のため）
-        // 注: この処理は重いため、必要に応じてコメントアウト可能
-        console.log("Executing spatial join...");
-        dataService.executeSpatialJoin();
-
-        // ポリゴン付きマッチング済みデータの取得
-        const farmlandsWithPolygonAndOwnership =
-          dataService.getFarmlandsWithPolygonAndOwnership();
-        console.log("Farmlands with polygons:", {
-          total: farmlandsWithPolygonAndOwnership.length,
-          withPolygon: farmlandsWithPolygonAndOwnership.filter(f => f.polygon).length,
-        });
-        setFarmlands(farmlandsWithPolygonAndOwnership);
-
-        // 統計情報の取得
-        const stats = dataService.getStatistics();
-        setStatistics(stats);
-
-        // 組織別統計の取得
-        const orgStats = dataService.getOrganizationStatistics();
-        setOrganizationStats(orgStats);
-
-        console.log("Data loaded successfully:", stats);
-        console.log("Organization stats:", orgStats);
+        // データサービスから地図データを取得
+        await loadDataFromService();
       } catch (err) {
-        console.error("Failed to load data:", err);
+        console.error("Failed to load data from files:", err);
         setError(
-          err instanceof Error ? err.message : "データの読み込みに失敗しました"
+          err instanceof Error
+            ? err.message
+            : "ファイルからのデータ読み込みに失敗しました"
         );
-      } finally {
-        setLoading(false);
+        throw err;
       }
-    };
-
-    loadData();
-  }, []);
+    },
+    [loadDataFromService]
+  );
 
   if (error) {
     return (
@@ -90,11 +116,43 @@ export default function Map() {
           <h2 className="text-red-600 text-xl font-bold mb-2">エラー</h2>
           <p className="text-gray-700">{error}</p>
           <button
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              setError(null);
+              setShowFileUpload(true);
+            }}
             className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
           >
-            再読み込み
+            戻る
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ファイルアップロード画面
+  if (showFileUpload && !dataLoaded) {
+    return (
+      <div className="w-full h-screen flex items-center justify-center bg-gray-100 p-4">
+        <div className="max-w-4xl w-full">
+          <h1 className="text-3xl font-bold text-gray-800 mb-6 text-center">
+            農地管理システム
+          </h1>
+          <FileUpload
+            onFilesLoaded={() => setShowFileUpload(false)}
+            onLoadData={handleLoadFromFiles}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // ローディング画面
+  if (loading) {
+    return (
+      <div className="w-full h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">データを読み込み中...</p>
         </div>
       </div>
     );
@@ -102,9 +160,20 @@ export default function Map() {
 
   return (
     <div className="relative w-full h-full">
+      {/* データ再アップロードボタン */}
+      <button
+        onClick={() => {
+          setShowFileUpload(true);
+          setDataLoaded(false);
+        }}
+        className="absolute top-4 right-4 z-[1000] px-4 py-2 bg-white border border-gray-300 rounded shadow hover:bg-gray-50 text-sm"
+      >
+        新しいデータを読み込む
+      </button>
+
       <DynamicMapContent
         farmlands={farmlands}
-        loading={loading}
+        loading={false}
         statistics={statistics}
         organizationStats={organizationStats}
       />
