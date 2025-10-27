@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { dataService } from "../services/dataService";
 import { FarmlandWithPolygon } from "../types/farmland.types";

@@ -101,7 +101,9 @@ export class DataService {
       const data: FarmlandCollection = JSON.parse(text);
 
       this.farmlandFeatures = data.features;
-      console.log(`Loaded ${this.farmlandFeatures.length} farmland features from file`);
+      console.log(
+        `Loaded ${this.farmlandFeatures.length} farmland features from file`
+      );
 
       // マッチング処理を実行
       this.performMatching();
@@ -121,7 +123,9 @@ export class DataService {
       const data: PolygonCollection = JSON.parse(cleanText);
 
       this.polygonFeatures = data.features;
-      console.log(`Loaded ${this.polygonFeatures.length} polygon features from file`);
+      console.log(
+        `Loaded ${this.polygonFeatures.length} polygon features from file`
+      );
     } catch (error) {
       console.error("Failed to load Polygon GeoJSON from file:", error);
       throw error;
@@ -373,6 +377,10 @@ export class DataService {
     }
 
     return "#FF0000"; // フォールバック色
+  }
+
+  getPolygonFeatures(): PolygonFeature[] {
+    return this.polygonFeatures;
   }
 
   // 集落営農組織別の色マッピング

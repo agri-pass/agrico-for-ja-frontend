@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Upload, Button, message, Card } from "antd";
 import { UploadOutlined, CheckCircleOutlined } from "@ant-design/icons";
-import type { UploadFile } from "antd/es/upload/interface";
 
 interface FileUploadProps {
   onFilesLoaded: () => void;

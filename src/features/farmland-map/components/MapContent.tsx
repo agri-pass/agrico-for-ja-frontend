@@ -4,17 +4,18 @@ import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Card, Modal } from "antd";
-import { FarmlandWithPolygon } from "../types/farmland.types";
+import { FarmlandWithPolygon, PolygonFeature } from "../types/farmland.types";
 import {
   Statistics,
   OrganizationStatistics,
   FarmlandDetails,
 } from "../types/statistics.types";
-import { dataService } from "../services/dataService";
+import { dataService, DataService } from "../services/dataService";
 import { formatArea } from "@/shared/lib/utils";
 
 // Leafletのデフォルトアイコンを修正
-delete (L.Icon.Default.prototype as any)._getIconUrl;
+delete (L.Icon.Default.prototype as unknown as { _getIconUrl: unknown })
+  ._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
@@ -23,6 +24,11 @@ L.Icon.Default.mergeOptions({
   shadowUrl:
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
 });
+
+// みやま市の中心座標（定数）
+const MIYAMA_CENTER: [number, number] = [
+  33.082281575000025, 130.47120210700007,
+];
 
 interface Props {
   farmlands: Array<FarmlandWithPolygon & { isCollectiveOwned: boolean }>;
@@ -53,11 +59,6 @@ export default function MapContent({
   const [showPins, setShowPins] = useState(true);
   const [showPolygons, setShowPolygons] = useState(true);
   const [showUnmatchedPolygons, setShowUnmatchedPolygons] = useState(false);
-
-  // みやま市の中心座標
-  const MIYAMA_CENTER: [number, number] = [
-    33.082281575000025, 130.47120210700007,
-  ];
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -107,17 +108,13 @@ export default function MapContent({
           // クラスタアイコンのカスタマイズ
           iconCreateFunction: function (cluster) {
             const count = cluster.getChildCount();
-            let size = "small";
             let className = "marker-cluster-";
 
             if (count < 10) {
-              size = "small";
               className += "small";
             } else if (count < 100) {
-              size = "medium";
               className += "medium";
             } else {
-              size = "large";
               className += "large";
             }
 
@@ -199,31 +196,39 @@ export default function MapContent({
 
     if (showUnmatchedPolygons && currentZoom >= POLYGON_ZOOM_THRESHOLD) {
       // 全てのポリゴンを取得してマッチしていないものを表示
-      import('../services/dataService').then(({ dataService }) => {
-        const allPolygons = (dataService as any).polygonFeatures || [];
+      import("../services/dataService").then(({ dataService }) => {
+        const allPolygons =
+          (dataService as DataService).getPolygonFeatures() || [];
         const matchedPolygonIds = new Set(
-          farmlands.filter(f => f.polygon).map(f => f.polygon?.properties.polygon_uuid)
+          farmlands
+            .filter((f) => f.polygon)
+            .map((f) => f.polygon?.properties.polygon_uuid)
         );
 
         unmatchedPolygonsRef.current?.clearLayers();
 
-        allPolygons.forEach((polygon: any) => {
+        allPolygons.forEach((polygon: PolygonFeature) => {
           if (!matchedPolygonIds.has(polygon.properties.polygon_uuid)) {
             const polygonLayer = L.polygon(
-              polygon.geometry.coordinates[0].map((coord: number[]) => [coord[1], coord[0]]),
+              polygon.geometry.coordinates[0].map((coord: number[]) => [
+                coord[1],
+                coord[0],
+              ]),
               {
-                color: '#888888',
-                fillColor: '#888888',
+                color: "#888888",
+                fillColor: "#888888",
                 fillOpacity: 0.2,
                 weight: 1,
-                dashArray: '5, 5',
+                dashArray: "5, 5",
               }
             );
 
             const tooltipContent = `
               <div class="text-xs">
                 <div class="font-semibold text-gray-600">未マッチポリゴン</div>
-                <div class="text-gray-500">ID: ${polygon.properties.polygon_uuid || 'N/A'}</div>
+                <div class="text-gray-500">ID: ${
+                  polygon.properties.polygon_uuid || "N/A"
+                }</div>
               </div>
             `;
 
@@ -236,12 +241,19 @@ export default function MapContent({
           }
         });
 
-        if (!mapRef.current?.hasLayer(unmatchedPolygonsRef.current)) {
-          mapRef.current?.addLayer(unmatchedPolygonsRef.current);
+        if (
+          unmatchedPolygonsRef.current &&
+          mapRef.current &&
+          !mapRef.current.hasLayer(unmatchedPolygonsRef.current)
+        ) {
+          mapRef.current.addLayer(unmatchedPolygonsRef.current);
         }
       });
     } else {
-      if (mapRef.current?.hasLayer(unmatchedPolygonsRef.current)) {
+      if (
+        unmatchedPolygonsRef.current &&
+        mapRef.current?.hasLayer(unmatchedPolygonsRef.current)
+      ) {
         mapRef.current?.removeLayer(unmatchedPolygonsRef.current);
       }
     }
@@ -289,8 +301,8 @@ export default function MapContent({
 
       const markers: L.Marker[] = [];
       const currentZoom = mapRef.current?.getZoom() || 0;
-      const shouldShowPolygons = showPolygons && currentZoom >= POLYGON_ZOOM_THRESHOLD;
-      let polygonAddedCount = 0;
+      const shouldShowPolygons =
+        showPolygons && currentZoom >= POLYGON_ZOOM_THRESHOLD;
 
       batch.forEach((farmland, index) => {
         const { geometry, properties, isCollectiveOwned, polygon } = farmland;
@@ -311,7 +323,6 @@ export default function MapContent({
 
         // ポリゴンがある場合は描画（ズームレベルが十分な場合のみ）
         if (polygon && shouldShowPolygons) {
-          polygonAddedCount++;
           const polygonLayer = L.polygon(
             polygon.geometry.coordinates[0].map((coord) => [
               coord[1],

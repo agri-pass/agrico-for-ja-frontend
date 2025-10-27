@@ -162,7 +162,7 @@ export default function MatchingDebug() {
               <span className="font-bold text-green-600">
                 {matchingResult.statistics.matchRate.toFixed(1)}%
               </span>
-              ({matchingResult.statistics.matchedCount}/
+              ({matchingResult.statistics.uniqueCSVMatches}/
               {matchingResult.statistics.totalCSV})
             </div>
           )}

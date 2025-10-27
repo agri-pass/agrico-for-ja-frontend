@@ -1,28 +1,16 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import dynamic from "next/dynamic";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import { Button, Input, Form, message } from "antd";
+import type L from "leaflet";
 
-// Leafletのデフォルトアイコンを修正
-if (typeof window !== "undefined") {
-  delete (L.Icon.Default.prototype as any)._getIconUrl;
-  L.Icon.Default.mergeOptions({
-    iconRetinaUrl:
-      "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
-    iconUrl:
-      "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
-    shadowUrl:
-      "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-  });
-}
+// SSGを無効化（Leafletはクライアントサイドのみで動作）
+export const dynamic = 'force-dynamic';
 
 export default function AddPinPage() {
-  const mapRef = useRef<L.Map | null>(null);
-  const polygonsRef = useRef<L.LayerGroup | null>(null);
-  const [currentMarker, setCurrentMarker] = useState<L.Marker | null>(null);
+  const mapRef = useRef<unknown>(null);
+  const polygonsRef = useRef<unknown>(null);
+  const [currentMarker, setCurrentMarker] = useState<unknown>(null);
   const [form] = Form.useForm();
   const [position, setPosition] = useState<[number, number] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,12 +20,29 @@ export default function AddPinPage() {
     if (typeof window === "undefined" || mapRef.current) return;
 
     const initMap = async () => {
+      // Leafletを動的にインポート
+      const L = (await import("leaflet")).default;
+      await import("leaflet/dist/leaflet.css");
+
+      // Leafletのデフォルトアイコンを修正
+      delete (L.Icon.Default.prototype as unknown as { _getIconUrl: unknown })
+        ._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl:
+          "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
+        iconUrl:
+          "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
+        shadowUrl:
+          "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+      });
+
       // 地図の初期化
-      mapRef.current = L.map("add-pin-map", {
+      const map = L.map("add-pin-map", {
         center: [33.082281575000025, 130.47120210700007],
         zoom: 14,
         zoomControl: true,
       });
+      mapRef.current = map;
 
       // 航空写真タイルレイヤーの追加
       L.tileLayer(
@@ -46,10 +51,11 @@ export default function AddPinPage() {
           attribution: "© Esri",
           maxZoom: 19,
         }
-      ).addTo(mapRef.current);
+      ).addTo(map);
 
       // ポリゴングループの初期化
-      polygonsRef.current = L.layerGroup().addTo(mapRef.current);
+      const polygons = L.layerGroup().addTo(map);
+      polygonsRef.current = polygons;
 
       // 未マッチポリゴンをロードして表示
       try {
@@ -70,57 +76,56 @@ export default function AddPinPage() {
         // 各ポリゴンがピンとマッチしているかチェック
         let unmatchedPolygons = 0;
 
-        polygonData.features.forEach((polygon: any) => {
-          let hasMatch = false;
+        polygonData.features.forEach(
+          (polygon: GeoJSON.Feature<GeoJSON.Polygon>) => {
+            let hasMatch = false;
 
-          // このポリゴン内にピンがあるかチェック
-          for (const pin of pinData.features) {
-            const point = turf.point(pin.geometry.coordinates);
-            if (turf.booleanPointInPolygon(point, polygon)) {
-              hasMatch = true;
-              break;
+            // このポリゴン内にピンがあるかチェック
+            for (const pin of pinData.features) {
+              const point = turf.point(pin.geometry.coordinates);
+              if (turf.booleanPointInPolygon(point, polygon)) {
+                hasMatch = true;
+                break;
+              }
             }
-          }
 
-          // マッチしていないポリゴンを表示
-          if (!hasMatch) {
-            unmatchedPolygons++;
-            const polygonLayer = L.polygon(
-              polygon.geometry.coordinates[0].map((coord: number[]) => [
-                coord[1],
-                coord[0],
-              ]),
-              {
+            // マッチしていないポリゴンを表示
+            if (!hasMatch) {
+              unmatchedPolygons++;
+              const coords = (
+                polygon.geometry.coordinates[0] as number[][]
+              ).map((coord) => [coord[1], coord[0]] as [number, number]);
+              const polygonLayer = L.polygon(coords, {
                 color: "#FF6B6B",
                 fillColor: "#FF6B6B",
                 fillOpacity: 0.25,
                 weight: 2,
                 dashArray: "5, 5",
-              }
-            );
+              });
 
-            const tooltipContent = `
+              const tooltipContent = `
               <div class="text-xs">
                 <div class="font-semibold text-red-600">未マッチポリゴン</div>
                 <div class="text-gray-600">ここにピンを追加してください</div>
                 <div class="text-gray-500 text-xs">ID: ${
-                  polygon.properties.polygon_uuid || "N/A"
+                  polygon.properties?.polygon_uuid || "N/A"
                 }</div>
               </div>
             `;
 
-            polygonLayer.bindTooltip(tooltipContent, {
-              direction: "top",
-              opacity: 0.9,
-            });
+              polygonLayer.bindTooltip(tooltipContent, {
+                direction: "top",
+                opacity: 0.9,
+              });
 
-            polygonLayer.on("click", (e) => {
-              // ポリゴンクリック時はイベントを停止しない（地図のクリックイベントも発火させる）
-            });
+              polygonLayer.on("click", () => {
+                // ポリゴンクリック時はイベントを停止しない（地図のクリックイベントも発火させる）
+              });
 
-            polygonsRef.current?.addLayer(polygonLayer);
+              polygons.addLayer(polygonLayer);
+            }
           }
-        });
+        );
 
         setUnmatchedCount(unmatchedPolygons);
         message.success(
@@ -134,16 +139,17 @@ export default function AddPinPage() {
       }
 
       // 地図クリックイベント
-      mapRef.current.on("click", (e) => {
+      map.on("click", (e) => {
         const { lat, lng } = e.latlng;
 
         // 既存のマーカーを削除
-        if (currentMarker) {
-          currentMarker.remove();
+        const prevMarker = currentMarker as L.Marker | null;
+        if (prevMarker) {
+          prevMarker.remove();
         }
 
         // 新しいマーカーを追加
-        const marker = L.marker([lat, lng]).addTo(mapRef.current!);
+        const marker = L.marker([lat, lng]).addTo(map);
         setCurrentMarker(marker);
         setPosition([lat, lng]);
 
@@ -160,17 +166,26 @@ export default function AddPinPage() {
     initMap();
 
     return () => {
-      if (mapRef.current) {
-        mapRef.current.remove();
+      const map = mapRef.current as L.Map | null;
+      const polygons = polygonsRef.current as L.LayerGroup | null;
+
+      if (map) {
+        map.remove();
         mapRef.current = null;
       }
-      if (polygonsRef.current) {
-        polygonsRef.current.clearLayers();
+      if (polygons) {
+        polygons.clearLayers();
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: {
+    address?: string;
+    tiban?: string;
+    area?: string;
+    classification?: string;
+  }) => {
     if (!position) {
       message.error("地図上でピンの位置をクリックしてください");
       return;
@@ -212,8 +227,9 @@ export default function AddPinPage() {
 
     // フォームをリセット
     form.resetFields();
-    if (currentMarker) {
-      currentMarker.remove();
+    const marker = currentMarker as L.Marker | null;
+    if (marker) {
+      marker.remove();
     }
     setCurrentMarker(null);
     setPosition(null);
