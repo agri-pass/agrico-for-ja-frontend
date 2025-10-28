@@ -30,17 +30,17 @@ const MIYAMA_CENTER: [number, number] = [
   33.082281575000025, 130.47120210700007,
 ];
 
-// 品種ごとの色パレット（対照的な色）
+// 品種ごとの色パレット（明るい色中心）
 const VARIETY_COLORS: Record<string, string> = {
-  // 米系（対照的な色）
-  元気つくし: "#2E7D32", // 濃い緑
-  ヒノヒカリ: "#1976D2", // 青
-  夢つくし: "#D32F2F", // 赤
+  // 米系（明るい色）
+  元気つくし: "#66BB6A", // 明るい緑
+  ヒノヒカリ: "#42A5F5", // 明るい青
+  夢つくし: "#EF5350", // 明るい赤
   // 麦系（明るい色）
-  ニシホナミ: "#FF9800", // オレンジ
-  はるか二条: "#FDD835", // 黄色
-  // 大豆系（紫/茶色）
-  大豆: "#7B1FA2", // 紫
+  ニシホナミ: "#FFA726", // 明るいオレンジ
+  はるか二条: "#FFEB3B", // 明るい黄色
+  // 大豆系（明るい紫）
+  大豆: "#AB47BC", // 明るい紫
 };
 
 // 品種から色を取得する関数
@@ -281,15 +281,6 @@ export default function MapContent({
 
   // 農地マーカーとポリゴンの更新（段階的レンダリング）
   useEffect(() => {
-    console.log("Marker effect check:", {
-      mapInitialized,
-      hasMap: !!mapRef.current,
-      hasCluster: !!markerClusterRef.current,
-      hasPolygons: !!polygonsRef.current,
-      loading,
-      farmlandsCount: farmlands.length,
-    });
-
     if (
       !mapInitialized ||
       !mapRef.current ||
@@ -300,8 +291,6 @@ export default function MapContent({
     ) {
       return;
     }
-
-    console.log(`Starting to render ${farmlands.length} farmlands`);
 
     // 既存のマーカーとポリゴンをクリア
     markerClusterRef.current.clearLayers();
@@ -324,19 +313,9 @@ export default function MapContent({
       const shouldShowPolygons =
         showPolygons && currentZoom >= POLYGON_ZOOM_THRESHOLD;
 
-      batch.forEach((farmland, index) => {
+      batch.forEach((farmland) => {
         const { geometry, properties, isCollectiveOwned, polygon } = farmland;
         const [lng, lat] = geometry.coordinates;
-
-        // デバッグ: 最初の数件でポリゴン情報をログ出力
-        if (currentIndex === 0 && index < 3) {
-          console.log(`Farmland ${index}:`, {
-            hasPolygon: !!polygon,
-            shouldShowPolygons,
-            currentZoom,
-            threshold: POLYGON_ZOOM_THRESHOLD,
-          });
-        }
 
         // 組織に基づいて色を決定
         const color = dataService.getFarmlandColor(properties.DaichoId);
@@ -483,12 +462,6 @@ export default function MapContent({
       // 次のバッチを処理
       if (currentIndex < farmlands.length) {
         requestAnimationFrame(addBatch);
-      } else {
-        const polygonCount = farmlands.filter((f) => f.polygon).length;
-        const totalPolygonsAdded = polygonsRef.current?.getLayers().length || 0;
-        console.log(
-          `Rendering complete: ${farmlands.length} markers, ${polygonCount} have polygon data, ${totalPolygonsAdded} polygons actually added to map (zoom: ${currentZoom}, threshold: ${POLYGON_ZOOM_THRESHOLD})`
-        );
       }
     };
 

@@ -426,8 +426,11 @@ export class DataService {
 
     // 組織名別に色を割り当て
     const organizations = new Set<string>();
-    for (const csvData of Array.from(this.matchingResults.values())) {
-      organizations.add(csvData.organizationName);
+    for (const csvDataList of Array.from(this.matchingResults.values())) {
+      // 配列の最初の要素から組織名を取得（同じ農地の全作期は同じ組織）
+      if (csvDataList.length > 0) {
+        organizations.add(csvDataList[0].organizationName);
+      }
     }
 
     const organizationColorMap = new Map<string, string>();
@@ -442,9 +445,10 @@ export class DataService {
 
     // マッチした農地に組織別の色を適用
     for (const feature of this.farmlandFeatures) {
-      const matchedCSV = this.matchingResults.get(feature.properties.DaichoId);
-      if (matchedCSV) {
-        const orgColor = organizationColorMap.get(matchedCSV.organizationName);
+      const matchedCSVList = this.matchingResults.get(feature.properties.DaichoId);
+      if (matchedCSVList && matchedCSVList.length > 0) {
+        // 配列の最初の要素から組織名を取得（表作・裏作で組織は同じ）
+        const orgColor = organizationColorMap.get(matchedCSVList[0].organizationName);
         if (orgColor) {
           colorMap.set(feature.properties.FarmerIndicationNumberHash, orgColor);
         }
@@ -477,8 +481,10 @@ export class DataService {
     ];
 
     const organizations = new Set<string>();
-    for (const csvData of Array.from(this.matchingResults.values())) {
-      organizations.add(csvData.organizationName);
+    for (const csvDataList of Array.from(this.matchingResults.values())) {
+      if (csvDataList.length > 0) {
+        organizations.add(csvDataList[0].organizationName);
+      }
     }
 
     // 組織別に色を割り当て
@@ -494,9 +500,9 @@ export class DataService {
 
     // 各農地を組織別に集計
     for (const feature of this.farmlandFeatures) {
-      const matchedCSV = this.matchingResults.get(feature.properties.DaichoId);
-      if (matchedCSV) {
-        const stats = orgStats.get(matchedCSV.organizationName);
+      const matchedCSVList = this.matchingResults.get(feature.properties.DaichoId);
+      if (matchedCSVList && matchedCSVList.length > 0) {
+        const stats = orgStats.get(matchedCSVList[0].organizationName);
         if (stats) {
           stats.count++;
           stats.area += parseInt(feature.properties.AreaOnRegistry) || 0;
