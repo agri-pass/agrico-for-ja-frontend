@@ -28,4 +28,5 @@ export interface FarmlandDetails {
   feature: import('./farmland.types').FarmlandFeature;
   isCollectiveOwned: boolean;
   ownershipInfo?: import('../lib/dataMatching').OwnedFarmlandCSV;
+  ownershipInfoList?: import('../lib/dataMatching').OwnedFarmlandCSV[]; // すべての作期のデータ
 }

@@ -4,10 +4,7 @@ import { useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { dataService } from "../services/dataService";
 import { FarmlandWithPolygon } from "../types/farmland.types";
-import {
-  Statistics,
-  OrganizationStatistics,
-} from "../types/statistics.types";
+import { Statistics, OrganizationStatistics } from "../types/statistics.types";
 import FileUpload from "./FileUpload";
 
 // Leafletを動的インポート（SSR回避）

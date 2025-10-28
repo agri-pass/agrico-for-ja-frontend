@@ -84,6 +84,19 @@ export default function MatchingDebug() {
             地番: {csv.chiban}
             {csv.edaban ? `-${csv.edaban}` : ""}
           </div>
+          {csv.cropCategory && (
+            <div className="text-blue-600 font-semibold mt-1">
+              作物: {csv.cropCategory}
+            </div>
+          )}
+          {csv.variety && (
+            <div className="text-blue-600">品種: {csv.variety}</div>
+          )}
+          {csv.sakki && (
+            <div className="text-gray-600">
+              作期: {csv.sakki === "1" ? "表作" : csv.sakki === "2" ? "裏作" : csv.sakki}
+            </div>
+          )}
           <div className="mt-2 text-xs">
             <div>正規化後:</div>
             <div>大字: {normalizeText(csv.oaza)}</div>

@@ -17,7 +17,7 @@ export class DataService {
   private farmlandFeatures: FarmlandFeature[] = [];
   private polygonFeatures: PolygonFeature[] = [];
   private ownedFarmlandCSV: OwnedFarmlandCSV[] = [];
-  private matchingResults: Map<string, OwnedFarmlandCSV> = new Map();
+  private matchingResults: Map<string, OwnedFarmlandCSV[]> = new Map(); // 複数のCSVレコードを保持
   private farmlandWithPolygons: FarmlandWithPolygon[] = [];
 
   // GeoJSONデータの読み込み
@@ -328,28 +328,41 @@ export class DataService {
     };
   }
 
-  // 特定の農地の詳細情報取得
-  getFarmlandDetails(daichoId: string) {
+  // 特定の農地の詳細情報取得（作期指定可能）
+  getFarmlandDetails(daichoId: string, sakki?: "1" | "2") {
     const feature = this.farmlandFeatures.find(
       (f) => f.properties.DaichoId === daichoId
     );
     if (!feature) return null;
 
-    const ownershipInfo = this.matchingResults.get(daichoId);
+    const ownershipInfoList = this.matchingResults.get(daichoId);
+
+    // 作期指定がある場合は該当する作期のデータのみ返す
+    let ownershipInfo: OwnedFarmlandCSV | undefined;
+    if (sakki && ownershipInfoList) {
+      ownershipInfo = ownershipInfoList.find((csv) => csv.sakki === sakki);
+    } else if (ownershipInfoList && ownershipInfoList.length > 0) {
+      // 作期指定がない場合は最初のデータを返す
+      ownershipInfo = ownershipInfoList[0];
+    }
 
     return {
       feature,
-      isCollectiveOwned: !!ownershipInfo,
+      isCollectiveOwned: !!ownershipInfoList && ownershipInfoList.length > 0,
       ownershipInfo,
+      ownershipInfoList, // すべての作期のデータ
     };
   }
 
   // 特定の農地の組織別色を取得
   getFarmlandColor(daichoId: string): string {
-    const matchedCSV = this.matchingResults.get(daichoId);
-    if (!matchedCSV) {
+    const matchedCSVList = this.matchingResults.get(daichoId);
+    if (!matchedCSVList || matchedCSVList.length === 0) {
       return "#FFFFFF"; // デフォルト色（その他農地）
     }
+
+    // 最初のCSVレコードから組織名を取得（表作・裏作で組織は同じ）
+    const matchedCSV = matchedCSVList[0];
 
     // 組織別の色を取得
     const organizationColors = [
@@ -364,8 +377,10 @@ export class DataService {
     ];
 
     const organizations = new Set<string>();
-    for (const csvData of Array.from(this.matchingResults.values())) {
-      organizations.add(csvData.organizationName);
+    for (const csvList of Array.from(this.matchingResults.values())) {
+      if (csvList.length > 0) {
+        organizations.add(csvList[0].organizationName);
+      }
     }
 
     let colorIndex = 0;

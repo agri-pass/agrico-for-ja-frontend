@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Card, Modal } from "antd";
+import { Card, Modal, Radio } from "antd";
 import { FarmlandWithPolygon, PolygonFeature } from "../types/farmland.types";
 import {
   Statistics,
@@ -29,6 +29,25 @@ L.Icon.Default.mergeOptions({
 const MIYAMA_CENTER: [number, number] = [
   33.082281575000025, 130.47120210700007,
 ];
+
+// 品種ごとの色パレット（対照的な色）
+const VARIETY_COLORS: Record<string, string> = {
+  // 米系（対照的な色）
+  元気つくし: "#2E7D32", // 濃い緑
+  ヒノヒカリ: "#1976D2", // 青
+  夢つくし: "#D32F2F", // 赤
+  // 麦系（明るい色）
+  ニシホナミ: "#FF9800", // オレンジ
+  はるか二条: "#FDD835", // 黄色
+  // 大豆系（紫/茶色）
+  大豆: "#7B1FA2", // 紫
+};
+
+// 品種から色を取得する関数
+function getVarietyColor(variety?: string): string {
+  if (!variety) return "#CCCCCC"; // デフォルト色（灰色）
+  return VARIETY_COLORS[variety] || "#CCCCCC";
+}
 
 interface Props {
   farmlands: Array<FarmlandWithPolygon & { isCollectiveOwned: boolean }>;
@@ -59,6 +78,7 @@ export default function MapContent({
   const [showPins, setShowPins] = useState(true);
   const [showPolygons, setShowPolygons] = useState(true);
   const [showUnmatchedPolygons, setShowUnmatchedPolygons] = useState(false);
+  const [sakkiFilter, setSakkiFilter] = useState<"1" | "2">("1"); // 作期フィルター（1: 表作、2: 裏作）
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -321,6 +341,23 @@ export default function MapContent({
         // 組織に基づいて色を決定
         const color = dataService.getFarmlandColor(properties.DaichoId);
 
+        // 作期フィルター: 指定された作期のデータを取得
+        const details = dataService.getFarmlandDetails(
+          properties.DaichoId,
+          sakkiFilter
+        );
+        const cropInfo = details?.ownershipInfo;
+
+        // 作期フィルター: 集落営農法人の農地で、選択された作期のデータがない場合はスキップ
+        if (isCollectiveOwned && !cropInfo) {
+          return;
+        }
+
+        // 品種の色（塗りつぶし）
+        const varietyColor = getVarietyColor(cropInfo?.variety);
+        // 耕作者の色（枠線）
+        const borderColor = color;
+
         // ポリゴンがある場合は描画（ズームレベルが十分な場合のみ）
         if (polygon && shouldShowPolygons) {
           const polygonLayer = L.polygon(
@@ -329,9 +366,9 @@ export default function MapContent({
               coord[0],
             ]),
             {
-              color: color,
-              fillColor: color,
-              fillOpacity: 0.3,
+              color: borderColor, // 枠線: 組織の色
+              fillColor: varietyColor, // 塗りつぶし: 品種の色
+              fillOpacity: isCollectiveOwned ? 1 : 0.7, // 耕作者がいる場合は不透明、いない場合は薄く
               weight: 2,
             }
           ).on("click", () => {
@@ -366,21 +403,16 @@ export default function MapContent({
           polygonsRef.current?.addLayer(polygonLayer);
         }
 
-        // カスタムアイコンの作成
+        // カスタムアイコンの作成（品種の色を塗りつぶし、耕作者の色を枠線に）
         const icon = L.divIcon({
           html: `
             <div style="
-              background-color: ${color};
+              background-color: ${varietyColor};
               width: 12px;
               height: 12px;
               border-radius: 50%;
-              border: 2px solid white;
+              border: 3px solid ${borderColor};
               box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-              ${
-                isCollectiveOwned
-                  ? "border-width: 3px; border-color: #000;"
-                  : ""
-              }
             "></div>
           `,
           className: "custom-farmland-marker",
@@ -394,7 +426,7 @@ export default function MapContent({
           setSelectedFarmland(details);
         });
 
-        // ツールチップの追加
+        // ツールチップの追加（作物情報を含む）
         const tooltipContent = `
           <div class="text-xs">
             <div class="font-semibold">${properties.Address}</div>
@@ -408,6 +440,23 @@ export default function MapContent({
             ${
               isCollectiveOwned
                 ? '<div class="text-red-600 font-semibold">集落営農法人</div>'
+                : ""
+            }
+            ${
+              cropInfo?.cropCategory
+                ? `<div class="text-blue-600">作物: ${cropInfo.cropCategory}</div>`
+                : ""
+            }
+            ${
+              cropInfo?.variety
+                ? `<div class="text-blue-600">品種: ${cropInfo.variety}</div>`
+                : ""
+            }
+            ${
+              cropInfo?.sakki
+                ? `<div class="text-gray-600">作期: ${
+                    cropInfo.sakki === "1" ? "表作" : "裏作"
+                  }</div>`
                 : ""
             }
           </div>
@@ -450,7 +499,7 @@ export default function MapContent({
     return () => {
       cancelled = true;
     };
-  }, [farmlands, loading, mapInitialized, showPins, showPolygons]);
+  }, [farmlands, loading, mapInitialized, showPins, showPolygons, sakkiFilter]);
 
   return (
     <div className="relative w-full h-full">
@@ -528,6 +577,32 @@ export default function MapContent({
         </div>
       </div>
 
+      {/* 作期切り替え（画面右上） */}
+      {!loading && renderProgress === 100 && (
+        <Card
+          style={{
+            position: "absolute",
+            top: 16,
+            right: 16,
+            width: 280,
+            zIndex: 1000,
+          }}
+          size="small"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-600 font-medium">作期:</span>
+            <Radio.Group
+              value={sakkiFilter}
+              onChange={(e) => setSakkiFilter(e.target.value)}
+              size="small"
+            >
+              <Radio.Button value="1">表作</Radio.Button>
+              <Radio.Button value="2">裏作</Radio.Button>
+            </Radio.Group>
+          </div>
+        </Card>
+      )}
+
       {/* レンダリング進捗表示 */}
       {renderProgress > 0 && renderProgress < 100 && (
         <Card
@@ -561,7 +636,7 @@ export default function MapContent({
           title="統計情報"
           style={{
             position: "absolute",
-            top: 96,
+            top: 80,
             right: 16,
             width: 280,
             zIndex: 1000,
@@ -618,6 +693,73 @@ export default function MapContent({
         </Card>
       )}
 
+      {/* 凡例（画面右上、統計情報の下） */}
+      {!loading && renderProgress === 100 && (
+        <Card
+          title="凡例"
+          style={{
+            position: "absolute",
+            top: 360,
+            right: 16,
+            width: 280,
+            zIndex: 1000,
+          }}
+          size="small"
+        >
+          <div className="space-y-3 text-xs">
+            {/* 品種の色（塗りつぶし） */}
+            <div>
+              <div className="font-semibold text-gray-700 mb-2">
+                品種（塗りつぶし）
+              </div>
+              <div className="space-y-1">
+                {Object.entries(VARIETY_COLORS).map(([variety, color]) => (
+                  <div key={variety} className="flex items-center gap-2">
+                    <div
+                      style={{
+                        backgroundColor: color,
+                        width: 16,
+                        height: 16,
+                        borderRadius: "50%",
+                        border: "2px solid #666",
+                      }}
+                    />
+                    <span className="text-gray-700">{variety}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 組織の色（枠線） */}
+            {organizationStats.length > 0 && (
+              <div>
+                <div className="font-semibold text-gray-700 mb-2">
+                  組織（枠線）
+                </div>
+                <div className="space-y-1">
+                  {organizationStats.map((org, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <div
+                        style={{
+                          backgroundColor: "#FFF",
+                          width: 16,
+                          height: 16,
+                          borderRadius: "50%",
+                          border: `3px solid ${org.color}`,
+                        }}
+                      />
+                      <span className="text-gray-700">
+                        {org.organizationName}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
       {/* 農地詳細モーダル */}
       <Modal
         title="農地詳細"
@@ -668,6 +810,57 @@ export default function MapContent({
                 }
               </span>
             </div>
+
+            {/* 作物情報（全作期） */}
+            {selectedFarmland.ownershipInfoList &&
+              selectedFarmland.ownershipInfoList.length > 0 && (
+                <div className="border-t pt-3 mt-4">
+                  <div className="text-gray-600 font-semibold mb-2">
+                    作物情報:
+                  </div>
+                  <div className="space-y-2">
+                    {selectedFarmland.ownershipInfoList.map(
+                      (cropData, index) => (
+                        <div
+                          key={index}
+                          className="bg-blue-50 p-3 rounded border border-blue-200"
+                        >
+                          <div className="space-y-1 text-sm">
+                            <div>
+                              <span className="text-gray-600">作期：</span>
+                              <span className="text-gray-900 font-medium">
+                                {cropData.sakki === "1"
+                                  ? "表作"
+                                  : cropData.sakki === "2"
+                                  ? "裏作"
+                                  : cropData.sakki || "不明"}
+                              </span>
+                            </div>
+                            {cropData.cropCategory && (
+                              <div>
+                                <span className="text-gray-600">
+                                  作物分類：
+                                </span>
+                                <span className="text-gray-900 font-medium">
+                                  {cropData.cropCategory}
+                                </span>
+                              </div>
+                            )}
+                            {cropData.variety && (
+                              <div>
+                                <span className="text-gray-600">品種：</span>
+                                <span className="text-gray-900 font-medium">
+                                  {cropData.variety}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
 
             {/* 技術情報（開発用） */}
             <div className="border-t pt-3 mt-4">
