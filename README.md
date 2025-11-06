@@ -1,11 +1,11 @@
 # 農地管理システム
 
-みやま市の農地管理システムのフロントエンドアプリケーション。集落営農法人が所有する農地をLeaflet地図上に可視化し、統計情報を表示します。
+農地管理システムのフロントエンドアプリケーション。集落営農法人が所有する農地を Leaflet 地図上に可視化し、統計情報を表示します。
 
 ## 機能
 
-- **ファイルアップロード**: GeoJSON（農地ピン・ポリゴン）とCSV（耕作者データ）をアップロード
-- **地図表示**: Leafletを使用した航空写真地図
+- **ファイルアップロード**: GeoJSON（農地ピン・ポリゴン）と CSV（耕作者データ）をアップロード
+- **地図表示**: Leaflet を使用した航空写真地図
 - **マーカークラスタリング**: 大量のピン（24MB+）を高速表示
 - **組織別色分け**: 集落営農法人ごとに色分けして表示
 - **統計情報**: 農地数、面積、マッチング率などを表示
@@ -48,16 +48,16 @@ npm run build
 npm start
 ```
 
-## Vercelへのデプロイ
+## Vercel へのデプロイ
 
 ### 前提条件
 
-- [Vercelアカウント](https://vercel.com/signup)
+- [Vercel アカウント](https://vercel.com/signup)
 - Git リポジトリ（GitHub, GitLab, Bitbucket）
 
-### 方法1: GitHub連携（推奨）
+### 方法 1: GitHub 連携（推奨）
 
-1. **GitHubにプッシュ**
+1. **GitHub にプッシュ**
 
 ```bash
 git add .
@@ -65,16 +65,19 @@ git commit -m "Initial commit"
 git push origin main
 ```
 
-2. **Vercelにログイン**
+2. **Vercel にログイン**
+
    - https://vercel.com にアクセス
-   - GitHubアカウントでログイン
+   - GitHub アカウントでログイン
 
 3. **プロジェクトをインポート**
+
    - 「Add New...」→「Project」をクリック
-   - GitHubリポジトリを選択
+   - GitHub リポジトリを選択
    - 「Import」をクリック
 
 4. **プロジェクト設定**
+
    - **Framework Preset**: Next.js（自動検出）
    - **Root Directory**: `./`
    - **Build Command**: `npm run build`
@@ -85,12 +88,12 @@ git push origin main
 
 5. **デプロイ**
    - 「Deploy」をクリック
-   - ビルド完了まで1-3分待つ
-   - 完了すると自動的にURLが発行されます
+   - ビルド完了まで 1-3 分待つ
+   - 完了すると自動的に URL が発行されます
 
-### 方法2: Vercel CLI
+### 方法 2: Vercel CLI
 
-1. **Vercel CLIのインストール**
+1. **Vercel CLI のインストール**
 
 ```bash
 npm install -g vercel
@@ -114,22 +117,24 @@ vercel --prod
 
 ### 自動デプロイ
 
-GitHub連携している場合、以下のブランチにpushすると自動デプロイされます：
+GitHub 連携している場合、以下のブランチに push すると自動デプロイされます：
 
 - `main` ブランチ → 本番環境
-- その他のブランチ → プレビュー環境（PR毎に一意のURL）
+- その他のブランチ → プレビュー環境（PR 毎に一意の URL）
 
 ## セキュリティ
 
 このアプリケーションは**完全にクライアントサイド**で動作します：
 
 ✅ **安全な点**
+
 - アップロードされたファイルはブラウザのメモリ内でのみ処理
 - サーバーにファイルは送信されません
 - 他のユーザーがデータを見ることはできません
 - ページリロードでデータは消去されます
 
 🔒 **セキュリティヘッダー**（`vercel.json`で設定済み）
+
 - `X-Content-Type-Options: nosniff`
 - `X-Frame-Options: DENY`
 - `X-XSS-Protection: 1; mode=block`
@@ -142,7 +147,7 @@ GitHub連携している場合、以下のブランチにpushすると自動デ�
 
 アプリケーションにアクセスすると、ファイルアップロード画面が表示されます。
 
-以下の3つのファイルを選択：
+以下の 3 つのファイルを選択：
 
 1. **農地ピン（GeoJSON）**: 農地の位置情報
 2. **ポリゴン（GeoJSON）**: 農地の境界情報
@@ -189,9 +194,9 @@ npm run build
 
 1. ブラウザの開発者ツール（F12）でエラー確認
 2. ファイル形式を確認（GeoJSON, CSV）
-3. ファイルサイズを確認（推奨: 50MB以下）
+3. ファイルサイズを確認（推奨: 50MB 以下）
 
-### Vercelデプロイエラー
+### Vercel デプロイエラー
 
 1. ビルドログを確認
 2. ローカルで `npm run build` が成功するか確認
@@ -220,4 +225,4 @@ Private
 
 ## サポート
 
-問題がある場合は、GitHubのIssuesで報告してください。
+問題がある場合は、GitHub の Issues で報告してください。

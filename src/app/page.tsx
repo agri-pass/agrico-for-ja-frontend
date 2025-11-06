@@ -32,11 +32,9 @@ export default function Home() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">
-              農地管理システム - みやま市
+              農地管理システム
             </h1>
-            <p className="text-sm text-gray-600">
-              あぐり支援室所有農地の可視化
-            </p>
+            <p className="text-sm text-gray-600"></p>
           </div>
           <div className="flex gap-2">
             <button
