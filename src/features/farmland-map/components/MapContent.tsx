@@ -78,6 +78,7 @@ export default function MapContent({
   const [showPins, setShowPins] = useState(true);
   const [showPolygons, setShowPolygons] = useState(true);
   const [showUnmatchedPolygons, setShowUnmatchedPolygons] = useState(false);
+  const [showOnlyMatchedPolygons, setShowOnlyMatchedPolygons] = useState(false);
   const [sakkiFilter, setSakkiFilter] = useState<"1" | "2">("1"); // 作期フィルター（1: 表作、2: 裏作）
 
   useEffect(() => {
@@ -338,7 +339,11 @@ export default function MapContent({
         const borderColor = color;
 
         // ポリゴンがある場合は描画（ズームレベルが十分な場合のみ）
-        if (polygon && shouldShowPolygons) {
+        // showOnlyMatchedPolygonsがtrueの場合は、耕作者データとマッチしたもののみ表示
+        const shouldRenderPolygon = polygon && shouldShowPolygons &&
+          (!showOnlyMatchedPolygons || (showOnlyMatchedPolygons && isCollectiveOwned));
+
+        if (shouldRenderPolygon) {
           const polygonLayer = L.polygon(
             polygon.geometry.coordinates[0].map((coord) => [
               coord[1],
@@ -472,7 +477,7 @@ export default function MapContent({
     return () => {
       cancelled = true;
     };
-  }, [farmlands, loading, mapInitialized, showPins, showPolygons, sakkiFilter]);
+  }, [farmlands, loading, mapInitialized, showPins, showPolygons, showOnlyMatchedPolygons, sakkiFilter]);
 
   return (
     <div className="relative w-full h-full">
@@ -537,6 +542,18 @@ export default function MapContent({
               className="mr-2 w-4 h-4"
             />
             <span className="text-sm">ポリゴンを表示</span>
+          </label>
+          <label className="flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showOnlyMatchedPolygons}
+              onChange={(e) => setShowOnlyMatchedPolygons(e.target.checked)}
+              disabled={!showPolygons}
+              className="mr-2 w-4 h-4"
+            />
+            <span className={`text-sm ${!showPolygons ? 'text-gray-400' : 'text-blue-600'}`}>
+              耕作者マッチのみ
+            </span>
           </label>
           <label className="flex items-center cursor-pointer">
             <input
