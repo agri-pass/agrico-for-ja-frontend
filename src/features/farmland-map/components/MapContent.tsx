@@ -80,6 +80,9 @@ export default function MapContent({
   const [showUnmatchedPolygons, setShowUnmatchedPolygons] = useState(false);
   const [showOnlyMatchedPolygons, setShowOnlyMatchedPolygons] = useState(false);
   const [sakkiFilter, setSakkiFilter] = useState<"1" | "2">("1"); // 作期フィルター（1: 表作、2: 裏作）
+  const [varietyStats, setVarietyStats] = useState<
+    Array<{ variety: string; count: number; area: number }>
+  >([]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -279,6 +282,14 @@ export default function MapContent({
       }
     }
   }, [showUnmatchedPolygons, mapInitialized, farmlands]);
+
+  // 品目別統計の更新（作期フィルターが変更されたときに再計算）
+  useEffect(() => {
+    if (!mapInitialized || farmlands.length === 0) return;
+
+    const stats = dataService.getVarietyStatistics(sakkiFilter);
+    setVarietyStats(stats);
+  }, [sakkiFilter, mapInitialized, farmlands]);
 
   // 農地マーカーとポリゴンの更新（段階的レンダリング）
   useEffect(() => {
@@ -703,20 +714,30 @@ export default function MapContent({
                 品種（塗りつぶし）
               </div>
               <div className="space-y-1">
-                {Object.entries(VARIETY_COLORS).map(([variety, color]) => (
-                  <div key={variety} className="flex items-center gap-2">
-                    <div
-                      style={{
-                        backgroundColor: color,
-                        width: 16,
-                        height: 16,
-                        borderRadius: "50%",
-                        border: "2px solid #666",
-                      }}
-                    />
-                    <span className="text-gray-700">{variety}</span>
-                  </div>
-                ))}
+                {Object.entries(VARIETY_COLORS).map(([variety, color]) => {
+                  const stats = varietyStats.find((s) => s.variety === variety);
+                  return (
+                    <div key={variety} className="flex items-center gap-2">
+                      <div
+                        style={{
+                          backgroundColor: color,
+                          width: 16,
+                          height: 16,
+                          borderRadius: "50%",
+                          border: "2px solid #666",
+                        }}
+                      />
+                      <div className="flex-1">
+                        <div className="text-gray-700">{variety}</div>
+                        {stats && (
+                          <div className="text-gray-500 text-[10px]">
+                            {formatArea(stats.area.toString())}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

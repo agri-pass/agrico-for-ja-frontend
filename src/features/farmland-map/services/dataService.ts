@@ -515,6 +515,51 @@ export class DataService {
       ...stats,
     }));
   }
+
+  // 品目別の統計情報を取得（作期指定可能）
+  getVarietyStatistics(sakki?: "1" | "2") {
+    const varietyStats = new Map<
+      string,
+      {
+        count: number;
+        area: number;
+      }
+    >();
+
+    // 各農地を品目別に集計
+    for (const feature of this.farmlandFeatures) {
+      const matchedCSVList = this.matchingResults.get(feature.properties.DaichoId);
+      if (matchedCSVList && matchedCSVList.length > 0) {
+        // 作期でフィルタリング
+        const filteredCSVList = sakki
+          ? matchedCSVList.filter((csv) => csv.sakki === sakki)
+          : matchedCSVList;
+
+        // 該当する作期のデータがあれば集計
+        if (filteredCSVList.length > 0) {
+          for (const csv of filteredCSVList) {
+            const variety = csv.variety || "不明";
+            const area = parseInt(feature.properties.AreaOnRegistry) || 0;
+
+            if (!varietyStats.has(variety)) {
+              varietyStats.set(variety, { count: 0, area: 0 });
+            }
+
+            const stats = varietyStats.get(variety)!;
+            stats.count++;
+            stats.area += area;
+          }
+        }
+      }
+    }
+
+    return Array.from(varietyStats.entries())
+      .map(([variety, stats]) => ({
+        variety,
+        ...stats,
+      }))
+      .sort((a, b) => b.area - a.area); // 面積の大きい順にソート
+  }
 }
 
 // シングルトンインスタンス
