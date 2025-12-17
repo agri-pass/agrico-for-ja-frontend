@@ -67,6 +67,13 @@ export function formatArea(areaString: string): string {
   }
 }
 
+export function formatAreaInTan(area: number): string {
+  if (isNaN(area) || area === 0) return "";
+  const sqm = Math.round(area).toLocaleString();
+  const tan = (area / 991.74).toFixed(2);
+  return `${sqm}㎡ (${tan}反)`;
+}
+
 export function getLandTypeColor(landType: string): string {
   switch (landType) {
     case "1":

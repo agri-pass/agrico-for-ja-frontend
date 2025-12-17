@@ -11,7 +11,7 @@ import {
   FarmlandDetails,
 } from "../types/statistics.types";
 import { dataService, DataService } from "../services/dataService";
-import { formatArea } from "@/shared/lib/utils";
+import { formatArea, formatAreaInTan } from "@/shared/lib/utils";
 
 // Leafletのデフォルトアイコンを修正
 delete (L.Icon.Default.prototype as unknown as { _getIconUrl: unknown })
@@ -727,12 +727,12 @@ export default function MapContent({
                           border: "2px solid #666",
                         }}
                       />
-                      <div className="flex-1">
-                        <div className="text-gray-700">{variety}</div>
+                      <div className="flex-1 flex items-center justify-between">
+                        <span className="text-gray-700">{variety}</span>
                         {stats && (
-                          <div className="text-gray-500 text-[10px]">
-                            {formatArea(stats.area.toString())}
-                          </div>
+                          <span className="text-gray-500 text-[10px]">
+                            {formatAreaInTan(stats.area)}
+                          </span>
                         )}
                       </div>
                     </div>
