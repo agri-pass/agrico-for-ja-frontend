@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { dataService } from "../services/dataService";
+import { useState, useRef } from "react";
 import {
   OwnedFarmlandCSV,
   parseOwnedFarmlandCSV,
@@ -13,7 +12,7 @@ import {
   performUnifiedMatching,
   UnifiedMatchingResult,
 } from "../lib/matchingService";
-import { FarmlandFeature } from "../types/farmland.types";
+import { FarmlandFeature, FarmlandGeoJSON } from "../types/farmland.types";
 
 export default function MatchingDebug() {
   const [farmlands, setFarmlands] = useState<FarmlandFeature[]>([]);
@@ -25,35 +24,56 @@ export default function MatchingDebug() {
     useState<OwnedFarmlandCSV | null>(null);
   const [selectedUnmatchedGeo, setSelectedUnmatchedGeo] =
     useState<FarmlandFeature | null>(null);
+  const [uploadedCsvFileName, setUploadedCsvFileName] = useState<string | null>(null);
+  const [uploadedGeoFileName, setUploadedGeoFileName] = useState<string | null>(null);
+  const csvFileInputRef = useRef<HTMLInputElement>(null);
+  const geoFileInputRef = useRef<HTMLInputElement>(null);
 
-  // データの読み込み
-  const loadData = async () => {
+  // CSVファイルアップロードハンドラー
+  const handleCsvUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
     setLoading(true);
-    try {
-      await Promise.all([dataService.loadGeoJSON(), dataService.loadCSV()]);
-
-      const farmlandsData = dataService.getFarmlandsWithOwnership();
-      setFarmlands(
-        farmlandsData.map((f) => ({
-          ...f,
-          isCollectiveOwned: undefined,
-        }))
-      );
-
-      // CSVデータを直接読み込み（現在使用中のCSVファイル）
-      const response = await fetch("/data/hinashiro_owned_farmland.csv");
-      const csvText = await response.text();
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const csvText = e.target?.result as string;
       const parsedCSV = parseOwnedFarmlandCSV(csvText);
       setCsvData(parsedCSV);
-
-      console.log(
-        `Loaded ${farmlandsData.length} farmlands and ${parsedCSV.length} CSV records`
-      );
-    } catch (error) {
-      console.error("Failed to load data:", error);
-    } finally {
+      setUploadedCsvFileName(file.name);
+      setMatchingResult(null);
+      setSelectedUnmatchedCSV(null);
+      setSelectedUnmatchedGeo(null);
       setLoading(false);
-    }
+      console.log(`Uploaded CSV ${file.name}: ${parsedCSV.length} records`);
+    };
+    reader.readAsText(file);
+  };
+
+  // GeoJSONファイルアップロードハンドラー
+  const handleGeoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setLoading(true);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const geoJson = JSON.parse(e.target?.result as string) as FarmlandGeoJSON;
+        setFarmlands(geoJson.features);
+        setUploadedGeoFileName(file.name);
+        setMatchingResult(null);
+        setSelectedUnmatchedCSV(null);
+        setSelectedUnmatchedGeo(null);
+        console.log(`Uploaded GeoJSON ${file.name}: ${geoJson.features.length} features`);
+      } catch (error) {
+        console.error("Failed to parse GeoJSON:", error);
+        alert("GeoJSONファイルの解析に失敗しました");
+      } finally {
+        setLoading(false);
+      }
+    };
+    reader.readAsText(file);
   };
 
   // マッチング実行（統一されたロジックを使用）
@@ -68,10 +88,6 @@ export default function MatchingDebug() {
       `Unique CSV matches: ${result.statistics.uniqueCSVMatches}/${result.statistics.totalCSV}`
     );
   };
-
-  useEffect(() => {
-    loadData();
-  }, []);
 
   const renderCSVAnalysis = (csv: OwnedFarmlandCSV) => {
     return (
@@ -152,14 +168,52 @@ export default function MatchingDebug() {
 
       {/* コントロールパネル */}
       <div className="bg-white p-4 rounded-lg shadow mb-6">
-        <div className="flex gap-4 items-center">
-          <button
-            onClick={loadData}
-            disabled={loading}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-          >
-            {loading ? "データ読み込み中..." : "データ再読み込み"}
-          </button>
+        <div className="flex flex-wrap gap-4 items-center">
+          {/* GeoJSONファイルアップロード */}
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              ref={geoFileInputRef}
+              accept=".json,.geojson"
+              onChange={handleGeoUpload}
+              className="hidden"
+            />
+            <button
+              onClick={() => geoFileInputRef.current?.click()}
+              disabled={loading}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            >
+              GeoJSONアップロード
+            </button>
+            {uploadedGeoFileName && (
+              <span className="text-sm text-blue-600 font-medium">
+                {uploadedGeoFileName}
+              </span>
+            )}
+          </div>
+
+          {/* CSVファイルアップロード */}
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              ref={csvFileInputRef}
+              accept=".csv"
+              onChange={handleCsvUpload}
+              className="hidden"
+            />
+            <button
+              onClick={() => csvFileInputRef.current?.click()}
+              disabled={loading}
+              className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+            >
+              CSVアップロード
+            </button>
+            {uploadedCsvFileName && (
+              <span className="text-sm text-purple-600 font-medium">
+                {uploadedCsvFileName}
+              </span>
+            )}
+          </div>
 
           <button
             onClick={runMatching}
@@ -179,6 +233,22 @@ export default function MatchingDebug() {
               {matchingResult.statistics.totalCSV})
             </div>
           )}
+        </div>
+
+        {/* データ件数表示 */}
+        <div className="mt-3 flex gap-6 text-sm text-gray-600">
+          <div>
+            GeoJSONデータ:{" "}
+            <span className={`font-semibold ${farmlands.length > 0 ? "text-blue-600" : "text-gray-400"}`}>
+              {farmlands.length > 0 ? `${farmlands.length}件` : "未読み込み"}
+            </span>
+          </div>
+          <div>
+            CSVデータ:{" "}
+            <span className={`font-semibold ${csvData.length > 0 ? "text-purple-600" : "text-gray-400"}`}>
+              {csvData.length > 0 ? `${csvData.length}件` : "未読み込み"}
+            </span>
+          </div>
         </div>
       </div>
 

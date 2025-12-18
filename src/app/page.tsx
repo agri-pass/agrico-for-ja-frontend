@@ -61,6 +61,12 @@ export default function Home() {
             >
               マッチングデバッグ
             </a>
+            <a
+              href="/add-pin"
+              className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm"
+            >
+              ピン追加ツール
+            </a>
           </div>
         </div>
       </header>

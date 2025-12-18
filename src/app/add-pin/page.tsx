@@ -5,7 +5,7 @@ import { Button, Input, Form, message } from "antd";
 import type L from "leaflet";
 
 // SSGを無効化（Leafletはクライアントサイドのみで動作）
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export default function AddPinPage() {
   const mapRef = useRef<unknown>(null);
@@ -13,9 +13,21 @@ export default function AddPinPage() {
   const [currentMarker, setCurrentMarker] = useState<unknown>(null);
   const [form] = Form.useForm();
   const [position, setPosition] = useState<[number, number] | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [unmatchedCount, setUnmatchedCount] = useState(0);
+  const [mapInitialized, setMapInitialized] = useState(false);
+  const [uploadedPinFileName, setUploadedPinFileName] = useState<string | null>(
+    null
+  );
+  const [uploadedPolygonFileName, setUploadedPolygonFileName] = useState<
+    string | null
+  >(null);
+  const pinFileInputRef = useRef<HTMLInputElement>(null);
+  const polygonFileInputRef = useRef<HTMLInputElement>(null);
+  const pinDataRef = useRef<GeoJSON.FeatureCollection | null>(null);
+  const polygonDataRef = useRef<GeoJSON.FeatureCollection | null>(null);
 
+  // 地図初期化
   useEffect(() => {
     if (typeof window === "undefined" || mapRef.current) return;
 
@@ -57,87 +69,6 @@ export default function AddPinPage() {
       const polygons = L.layerGroup().addTo(map);
       polygonsRef.current = polygons;
 
-      // 未マッチポリゴンをロードして表示
-      try {
-        setLoading(true);
-
-        // GeoJSONとPolygonデータを読み込む
-        const [pinResponse, polygonResponse] = await Promise.all([
-          fetch("/data/hinashiro_pin.geojson"),
-          fetch("/data/hinashiro_polygon.geojson"),
-        ]);
-
-        const pinData = await pinResponse.json();
-        const polygonData = await polygonResponse.json();
-
-        // point-in-polygon判定用にTurfをインポート
-        const turf = await import("@turf/turf");
-
-        // 各ポリゴンがピンとマッチしているかチェック
-        let unmatchedPolygons = 0;
-
-        polygonData.features.forEach(
-          (polygon: GeoJSON.Feature<GeoJSON.Polygon>) => {
-            let hasMatch = false;
-
-            // このポリゴン内にピンがあるかチェック
-            for (const pin of pinData.features) {
-              const point = turf.point(pin.geometry.coordinates);
-              if (turf.booleanPointInPolygon(point, polygon)) {
-                hasMatch = true;
-                break;
-              }
-            }
-
-            // マッチしていないポリゴンを表示
-            if (!hasMatch) {
-              unmatchedPolygons++;
-              const coords = (
-                polygon.geometry.coordinates[0] as number[][]
-              ).map((coord) => [coord[1], coord[0]] as [number, number]);
-              const polygonLayer = L.polygon(coords, {
-                color: "#FF6B6B",
-                fillColor: "#FF6B6B",
-                fillOpacity: 0.25,
-                weight: 2,
-                dashArray: "5, 5",
-              });
-
-              const tooltipContent = `
-              <div class="text-xs">
-                <div class="font-semibold text-red-600">未マッチポリゴン</div>
-                <div class="text-gray-600">ここにピンを追加してください</div>
-                <div class="text-gray-500 text-xs">ID: ${
-                  polygon.properties?.polygon_uuid || "N/A"
-                }</div>
-              </div>
-            `;
-
-              polygonLayer.bindTooltip(tooltipContent, {
-                direction: "top",
-                opacity: 0.9,
-              });
-
-              polygonLayer.on("click", () => {
-                // ポリゴンクリック時はイベントを停止しない（地図のクリックイベントも発火させる）
-              });
-
-              polygons.addLayer(polygonLayer);
-            }
-          }
-        );
-
-        setUnmatchedCount(unmatchedPolygons);
-        message.success(
-          `${unmatchedPolygons}個の未マッチポリゴンを表示しました`
-        );
-      } catch (error) {
-        console.error("Failed to load polygons:", error);
-        message.error("ポリゴンデータの読み込みに失敗しました");
-      } finally {
-        setLoading(false);
-      }
-
       // 地図クリックイベント
       map.on("click", (e) => {
         const { lat, lng } = e.latlng;
@@ -161,6 +92,8 @@ export default function AddPinPage() {
 
         message.info(`座標: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
       });
+
+      setMapInitialized(true);
     };
 
     initMap();
@@ -179,6 +112,137 @@ export default function AddPinPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ピンファイルアップロードハンドラー
+  const handlePinUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(
+          e.target?.result as string
+        ) as GeoJSON.FeatureCollection;
+        pinDataRef.current = data;
+        setUploadedPinFileName(file.name);
+        message.success(
+          `ピンデータ ${file.name}: ${data.features.length}件を読み込みました`
+        );
+      } catch (error) {
+        console.error("Failed to parse pin GeoJSON:", error);
+        message.error("ピンGeoJSONの解析に失敗しました");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // ポリゴンファイルアップロードハンドラー
+  const handlePolygonUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(
+          e.target?.result as string
+        ) as GeoJSON.FeatureCollection;
+        polygonDataRef.current = data;
+        setUploadedPolygonFileName(file.name);
+        message.success(
+          `ポリゴンデータ ${file.name}: ${data.features.length}件を読み込みました`
+        );
+      } catch (error) {
+        console.error("Failed to parse polygon GeoJSON:", error);
+        message.error("ポリゴンGeoJSONの解析に失敗しました");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // マッチング実行
+  const runMatching = async () => {
+    if (!pinDataRef.current || !polygonDataRef.current) {
+      message.error("ピンデータとポリゴンデータを両方アップロードしてください");
+      return;
+    }
+
+    const polygons = polygonsRef.current as L.LayerGroup | null;
+    if (!polygons) return;
+
+    setLoading(true);
+    polygons.clearLayers();
+
+    try {
+      const L = (await import("leaflet")).default;
+      const turf = await import("@turf/turf");
+
+      const pinData = pinDataRef.current;
+      const polygonData = polygonDataRef.current;
+
+      let unmatchedPolygons = 0;
+
+      polygonData.features.forEach((feature) => {
+        // Polygonタイプのみ処理
+        if (feature.geometry.type !== "Polygon") return;
+
+        const polygon = feature as GeoJSON.Feature<GeoJSON.Polygon>;
+        let hasMatch = false;
+
+        for (const pin of pinData.features) {
+          if (pin.geometry.type === "Point") {
+            const point = turf.point(
+              (pin.geometry as GeoJSON.Point).coordinates
+            );
+            if (turf.booleanPointInPolygon(point, polygon)) {
+              hasMatch = true;
+              break;
+            }
+          }
+        }
+
+        if (!hasMatch) {
+          unmatchedPolygons++;
+          const coords = (polygon.geometry.coordinates[0] as number[][]).map(
+            (coord) => [coord[1], coord[0]] as [number, number]
+          );
+          const polygonLayer = L.polygon(coords, {
+            color: "#FF6B6B",
+            fillColor: "#FF6B6B",
+            fillOpacity: 0.25,
+            weight: 2,
+            dashArray: "5, 5",
+          });
+
+          const tooltipContent = `
+            <div class="text-xs">
+              <div class="font-semibold text-red-600">未マッチポリゴン</div>
+              <div class="text-gray-600">ここにピンを追加してください</div>
+              <div class="text-gray-500 text-xs">ID: ${
+                polygon.properties?.polygon_uuid || "N/A"
+              }</div>
+            </div>
+          `;
+
+          polygonLayer.bindTooltip(tooltipContent, {
+            direction: "top",
+            opacity: 0.9,
+          });
+
+          polygons.addLayer(polygonLayer);
+        }
+      });
+
+      setUnmatchedCount(unmatchedPolygons);
+      message.success(`${unmatchedPolygons}個の未マッチポリゴンを表示しました`);
+    } catch (error) {
+      console.error("Matching failed:", error);
+      message.error("マッチング処理に失敗しました");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (values: {
     address?: string;
@@ -239,15 +303,82 @@ export default function AddPinPage() {
     <div className="h-screen flex flex-col">
       {/* ヘッダー */}
       <div className="bg-white shadow p-4">
-        <h1 className="text-2xl font-bold">ピン追加ツール</h1>
-        <p className="text-gray-600 text-sm">
-          赤いポリゴン（未マッチ）をクリックして位置を選択し、住所情報を入力してください
-        </p>
-        {!loading && unmatchedCount > 0 && (
-          <div className="mt-2 inline-block px-3 py-1 bg-red-100 text-red-700 rounded text-sm">
-            未マッチポリゴン: {unmatchedCount}個
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <h1 className="text-2xl font-bold">ピン追加ツール</h1>
+            <p className="text-gray-600 text-sm">
+              ピンとポリゴンデータをアップロードして、未マッチポリゴンを確認できます
+            </p>
           </div>
-        )}
+          {!loading && unmatchedCount > 0 && (
+            <div className="px-3 py-1 bg-red-100 text-red-700 rounded text-sm">
+              未マッチポリゴン: {unmatchedCount}個
+            </div>
+          )}
+        </div>
+
+        {/* ファイルアップロードコントロール */}
+        <div className="flex flex-wrap gap-3 items-center mt-3 p-3 bg-gray-50 rounded">
+          {/* ピンファイルアップロード */}
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              ref={pinFileInputRef}
+              accept=".json,.geojson"
+              onChange={handlePinUpload}
+              className="hidden"
+            />
+            <Button
+              onClick={() => pinFileInputRef.current?.click()}
+              disabled={loading || !mapInitialized}
+            >
+              ピンGeoJSONアップロード
+            </Button>
+            {uploadedPinFileName ? (
+              <span className="text-sm text-blue-600 font-medium">
+                {uploadedPinFileName}
+              </span>
+            ) : (
+              <span className="text-sm text-gray-400">未読み込み</span>
+            )}
+          </div>
+
+          {/* ポリゴンファイルアップロード */}
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              ref={polygonFileInputRef}
+              accept=".json,.geojson"
+              onChange={handlePolygonUpload}
+              className="hidden"
+            />
+            <Button
+              onClick={() => polygonFileInputRef.current?.click()}
+              disabled={loading || !mapInitialized}
+            >
+              ポリゴンGeoJSONアップロード
+            </Button>
+            {uploadedPolygonFileName ? (
+              <span className="text-sm text-purple-600 font-medium">
+                {uploadedPolygonFileName}
+              </span>
+            ) : (
+              <span className="text-sm text-gray-400">未読み込み</span>
+            )}
+          </div>
+
+          {/* マッチング実行ボタン */}
+          <Button
+            type="primary"
+            onClick={runMatching}
+            disabled={
+              loading || !uploadedPinFileName || !uploadedPolygonFileName
+            }
+            loading={loading}
+          >
+            マッチング実行
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 flex">
@@ -259,10 +390,26 @@ export default function AddPinPage() {
             <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-[1000]">
               <div className="text-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p className="text-gray-600">未マッチポリゴンを読み込み中...</p>
+                <p className="text-gray-600">マッチング処理中...</p>
               </div>
             </div>
           )}
+
+          {!loading &&
+            !uploadedPinFileName &&
+            !uploadedPolygonFileName &&
+            mapInitialized && (
+              <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center z-[500]">
+                <div className="text-center p-6 bg-white rounded-lg shadow-lg">
+                  <p className="text-gray-700 font-semibold mb-2">
+                    データをアップロードしてください
+                  </p>
+                  <p className="text-gray-500 text-sm">
+                    ピンGeoJSONとポリゴンGeoJSONをアップロードして、マッチング実行を押してください
+                  </p>
+                </div>
+              </div>
+            )}
         </div>
 
         {/* フォームエリア */}
