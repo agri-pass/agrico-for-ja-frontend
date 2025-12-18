@@ -12,7 +12,7 @@ import {
   performUnifiedMatching,
   UnifiedMatchingResult,
 } from "../lib/matchingService";
-import { FarmlandFeature, FarmlandGeoJSON } from "../types/farmland.types";
+import { FarmlandFeature, FarmlandCollection } from "../types/farmland.types";
 
 export default function MatchingDebug() {
   const [farmlands, setFarmlands] = useState<FarmlandFeature[]>([]);
@@ -59,7 +59,7 @@ export default function MatchingDebug() {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const geoJson = JSON.parse(e.target?.result as string) as FarmlandGeoJSON;
+        const geoJson = JSON.parse(e.target?.result as string) as FarmlandCollection;
         setFarmlands(geoJson.features);
         setUploadedGeoFileName(file.name);
         setMatchingResult(null);
