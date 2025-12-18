@@ -24,12 +24,6 @@ const REGIONS = [
     pinFile: "/data/miyazaki_pin.geojson",
     polygonFile: "/data/miyazaki_polygon.geojson",
   },
-  {
-    id: "asakura",
-    name: "朝倉",
-    pinFile: "/data/asakura_pin.geojson",
-    polygonFile: null,
-  },
 ];
 
 interface FileUploadProps {

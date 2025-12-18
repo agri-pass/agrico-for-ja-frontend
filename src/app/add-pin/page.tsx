@@ -30,13 +30,6 @@ const REGIONS = [
     polygonFile: "/data/miyazaki_polygon.geojson",
     center: [31.9, 131.4] as [number, number],
   },
-  {
-    id: "asakura",
-    name: "朝倉",
-    pinFile: "/data/asakura_pin.geojson",
-    polygonFile: null, // ポリゴンデータなし
-    center: [33.4, 130.8] as [number, number],
-  },
 ];
 
 export default function AddPinPage() {
@@ -233,7 +226,9 @@ export default function AddPinPage() {
           const polygonData =
             (await polygonResponse.json()) as GeoJSON.FeatureCollection;
           polygonDataRef.current = polygonData;
-          setUploadedPolygonFileName(region.polygonFile.split("/").pop() || null);
+          setUploadedPolygonFileName(
+            region.polygonFile.split("/").pop() || null
+          );
           message.success(
             `ポリゴンデータ: ${polygonData.features.length}件を読み込みました`
           );
