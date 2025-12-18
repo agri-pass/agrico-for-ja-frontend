@@ -1,11 +1,43 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Button, Input, Form, message } from "antd";
+import { Button, Input, Form, message, Select } from "antd";
 import type L from "leaflet";
 
 // SSGを無効化（Leafletはクライアントサイドのみで動作）
 export const dynamic = "force-dynamic";
+
+// 利用可能な地域データの定義
+const REGIONS = [
+  {
+    id: "hinashiro",
+    name: "ひなしろ",
+    pinFile: "/data/hinashiro_pin.geojson",
+    polygonFile: "/data/hinashiro_polygon.geojson",
+    center: [33.082281575000025, 130.47120210700007] as [number, number],
+  },
+  {
+    id: "taisenji",
+    name: "泰仙寺",
+    pinFile: "/data/taisenji_pin.geojson",
+    polygonFile: "/data/taisenji_polygon.geojson",
+    center: [33.15, 130.52] as [number, number],
+  },
+  {
+    id: "miyazaki",
+    name: "宮崎",
+    pinFile: "/data/miyazaki_pin.geojson",
+    polygonFile: "/data/miyazaki_polygon.geojson",
+    center: [31.9, 131.4] as [number, number],
+  },
+  {
+    id: "asakura",
+    name: "朝倉",
+    pinFile: "/data/asakura_pin.geojson",
+    polygonFile: null, // ポリゴンデータなし
+    center: [33.4, 130.8] as [number, number],
+  },
+];
 
 export default function AddPinPage() {
   const mapRef = useRef<unknown>(null);
@@ -16,6 +48,7 @@ export default function AddPinPage() {
   const [loading, setLoading] = useState(false);
   const [unmatchedCount, setUnmatchedCount] = useState(0);
   const [mapInitialized, setMapInitialized] = useState(false);
+  const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
   const [uploadedPinFileName, setUploadedPinFileName] = useState<string | null>(
     null
   );
@@ -159,6 +192,67 @@ export default function AddPinPage() {
       }
     };
     reader.readAsText(file);
+  };
+
+  // 地域選択ハンドラー
+  const handleRegionSelect = async (regionId: string) => {
+    const region = REGIONS.find((r) => r.id === regionId);
+    if (!region) return;
+
+    setLoading(true);
+    setSelectedRegion(regionId);
+
+    // 既存のデータをクリア
+    pinDataRef.current = null;
+    polygonDataRef.current = null;
+    setUploadedPinFileName(null);
+    setUploadedPolygonFileName(null);
+    setUnmatchedCount(0);
+
+    const polygons = polygonsRef.current as L.LayerGroup | null;
+    if (polygons) {
+      polygons.clearLayers();
+    }
+
+    try {
+      // ピンデータを読み込み
+      const pinResponse = await fetch(region.pinFile);
+      if (pinResponse.ok) {
+        const pinData = (await pinResponse.json()) as GeoJSON.FeatureCollection;
+        pinDataRef.current = pinData;
+        setUploadedPinFileName(region.pinFile.split("/").pop() || null);
+        message.success(
+          `ピンデータ: ${pinData.features.length}件を読み込みました`
+        );
+      }
+
+      // ポリゴンデータを読み込み（存在する場合）
+      if (region.polygonFile) {
+        const polygonResponse = await fetch(region.polygonFile);
+        if (polygonResponse.ok) {
+          const polygonData =
+            (await polygonResponse.json()) as GeoJSON.FeatureCollection;
+          polygonDataRef.current = polygonData;
+          setUploadedPolygonFileName(region.polygonFile.split("/").pop() || null);
+          message.success(
+            `ポリゴンデータ: ${polygonData.features.length}件を読み込みました`
+          );
+        }
+      } else {
+        message.info("この地域にはポリゴンデータがありません");
+      }
+
+      // 地図の中心を移動
+      const map = mapRef.current as L.Map | null;
+      if (map && region.center) {
+        map.setView(region.center, 14);
+      }
+    } catch (error) {
+      console.error("Failed to load region data:", error);
+      message.error("地域データの読み込みに失敗しました");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // マッチング実行
@@ -317,8 +411,37 @@ export default function AddPinPage() {
           )}
         </div>
 
-        {/* ファイルアップロードコントロール */}
+        {/* データ選択コントロール */}
         <div className="flex flex-wrap gap-3 items-center mt-3 p-3 bg-gray-50 rounded">
+          {/* 地域プルダウン */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600 font-medium">地域選択:</span>
+            <Select
+              placeholder="地域を選択"
+              value={selectedRegion}
+              onChange={handleRegionSelect}
+              disabled={loading || !mapInitialized}
+              style={{ width: 150 }}
+              allowClear
+              onClear={() => {
+                setSelectedRegion(null);
+                pinDataRef.current = null;
+                polygonDataRef.current = null;
+                setUploadedPinFileName(null);
+                setUploadedPolygonFileName(null);
+                setUnmatchedCount(0);
+                const polygons = polygonsRef.current as L.LayerGroup | null;
+                if (polygons) polygons.clearLayers();
+              }}
+              options={REGIONS.map((r) => ({
+                value: r.id,
+                label: r.name,
+              }))}
+            />
+          </div>
+
+          <div className="border-l border-gray-300 h-8 mx-2" />
+
           {/* ピンファイルアップロード */}
           <div className="flex items-center gap-2">
             <input
@@ -331,8 +454,9 @@ export default function AddPinPage() {
             <Button
               onClick={() => pinFileInputRef.current?.click()}
               disabled={loading || !mapInitialized}
+              size="small"
             >
-              ピンGeoJSONアップロード
+              ピンアップロード
             </Button>
             {uploadedPinFileName ? (
               <span className="text-sm text-blue-600 font-medium">
@@ -355,8 +479,9 @@ export default function AddPinPage() {
             <Button
               onClick={() => polygonFileInputRef.current?.click()}
               disabled={loading || !mapInitialized}
+              size="small"
             >
-              ポリゴンGeoJSONアップロード
+              ポリゴンアップロード
             </Button>
             {uploadedPolygonFileName ? (
               <span className="text-sm text-purple-600 font-medium">
@@ -402,10 +527,10 @@ export default function AddPinPage() {
               <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center z-[500]">
                 <div className="text-center p-6 bg-white rounded-lg shadow-lg">
                   <p className="text-gray-700 font-semibold mb-2">
-                    データをアップロードしてください
+                    データを読み込んでください
                   </p>
                   <p className="text-gray-500 text-sm">
-                    ピンGeoJSONとポリゴンGeoJSONをアップロードして、マッチング実行を押してください
+                    地域を選択するか、ファイルをアップロードしてください
                   </p>
                 </div>
               </div>
