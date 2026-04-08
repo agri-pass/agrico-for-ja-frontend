@@ -19,6 +19,7 @@ export class DataService {
   private ownedFarmlandCSV: OwnedFarmlandCSV[] = [];
   private matchingResults: Map<string, OwnedFarmlandCSV[]> = new Map(); // 複数のCSVレコードを保持
   private farmlandWithPolygons: FarmlandWithPolygon[] = [];
+  private memberNumberMap: Map<string, number> = new Map(); // 構成員名 → 番号
 
   // GeoJSONデータの読み込み
   async loadGeoJSON(
@@ -157,6 +158,7 @@ export class DataService {
     this.ownedFarmlandCSV = [];
     this.matchingResults = new Map();
     this.farmlandWithPolygons = [];
+    this.memberNumberMap = new Map();
     console.log("Data reset completed");
   }
 
@@ -175,6 +177,9 @@ export class DataService {
     );
     this.matchingResults = result.matchingResults;
 
+    // 構成員番号マップを構築
+    this.buildMemberNumberMap();
+
     console.log(
       `Matching complete: ${result.statistics.matchedFeatures} GeoJSON features matched`
     );
@@ -182,6 +187,46 @@ export class DataService {
       `Unique CSV matches: ${result.statistics.uniqueCSVMatches}/${result.statistics.totalCSV}`
     );
     console.log(`Match rate: ${result.statistics.matchRate.toFixed(1)}%`);
+    console.log(`Member number map: ${this.memberNumberMap.size} members`);
+  }
+
+  // 構成員番号マップを構築
+  private buildMemberNumberMap(): void {
+    this.memberNumberMap = new Map();
+    const members = new Set<string>();
+
+    for (const csvList of Array.from(this.matchingResults.values())) {
+      for (const csv of csvList) {
+        if (csv.member) {
+          members.add(csv.member);
+        }
+      }
+    }
+
+    // ソートして番号を割り当て
+    let num = 1;
+    for (const member of Array.from(members).sort()) {
+      this.memberNumberMap.set(member, num);
+      num++;
+    }
+  }
+
+  // 構成員番号マップを取得
+  getMemberNumberMap(): Map<string, number> {
+    return this.memberNumberMap;
+  }
+
+  // 特定の農地の構成員番号を取得（作期指定可能）
+  getMemberNumber(daichoId: string, sakki?: "1" | "2"): number | null {
+    const csvList = this.matchingResults.get(daichoId);
+    if (!csvList || csvList.length === 0) return null;
+
+    const csv = sakki
+      ? csvList.find((c) => c.sakki === sakki)
+      : csvList[0];
+
+    if (!csv?.member) return null;
+    return this.memberNumberMap.get(csv.member) ?? null;
   }
 
   // 空間結合処理（Turfを使用してpoint-in-polygon判定）

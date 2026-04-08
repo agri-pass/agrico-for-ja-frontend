@@ -13,6 +13,7 @@ export interface OwnedFarmlandCSV {
   sakki?: string; // 作期（1: 表作、2: 裏作）
   cropCategory?: string; // 作物分類（米、大豆など）
   variety?: string; // 品種（元気つくし、ヒノヒカリなど）
+  member?: string; // 構成員
 }
 
 // CSVデータのパース
@@ -40,6 +41,7 @@ export function parseOwnedFarmlandCSV(csvText: string): OwnedFarmlandCSV[] {
       sakki: parts[8] || undefined, // 作期
       cropCategory: parts[9] || undefined, // 作物分類
       variety: parts[10] || undefined, // 品種
+      member: parts[11] || undefined, // 構成員
     });
   }
 

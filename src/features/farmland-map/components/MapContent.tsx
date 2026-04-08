@@ -352,6 +352,11 @@ export default function MapContent({
         const varietyColor = getVarietyColor(cropInfo?.variety);
         // 耕作者の色（枠線）
         const borderColor = color;
+        // 構成員番号
+        const memberNumber = dataService.getMemberNumber(
+          properties.DaichoId,
+          sakkiFilter
+        );
 
         // ポリゴンがある場合は描画（ズームレベルが十分な場合のみ）
         // showOnlyMatchedPolygonsがtrueの場合は、耕作者データとマッチしたもののみ表示
@@ -402,9 +407,29 @@ export default function MapContent({
           polygonsRef.current?.addLayer(polygonLayer);
         }
 
-        // カスタムアイコンの作成（品種の色を塗りつぶし、耕作者の色を枠線に）
+        // カスタムアイコンの作成（品種の色を塗りつぶし、耕作者の色を枠線に、構成員番号を表示）
+        const iconSize = memberNumber ? 22 : 16;
         const icon = L.divIcon({
-          html: `
+          html: memberNumber
+            ? `
+            <div style="
+              background-color: ${varietyColor};
+              width: ${iconSize}px;
+              height: ${iconSize}px;
+              border-radius: 50%;
+              border: 3px solid ${borderColor};
+              box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 10px;
+              font-weight: bold;
+              color: #fff;
+              text-shadow: 0 0 2px rgba(0,0,0,0.7);
+              line-height: 1;
+            ">${memberNumber}</div>
+          `
+            : `
             <div style="
               background-color: ${varietyColor};
               width: 12px;
@@ -415,8 +440,8 @@ export default function MapContent({
             "></div>
           `,
           className: "custom-farmland-marker",
-          iconSize: [16, 16],
-          iconAnchor: [8, 8],
+          iconSize: [iconSize, iconSize],
+          iconAnchor: [iconSize / 2, iconSize / 2],
         });
 
         // マーカーを作成
@@ -456,6 +481,11 @@ export default function MapContent({
                 ? `<div class="text-gray-600">作期: ${
                     cropInfo.sakki === "1" ? "表作" : "裏作"
                   }</div>`
+                : ""
+            }
+            ${
+              cropInfo?.member
+                ? `<div class="text-purple-600">構成員: ${cropInfo.member}（No.${memberNumber}）</div>`
                 : ""
             }
           </div>
@@ -707,6 +737,8 @@ export default function MapContent({
             top: 360,
             right: 16,
             width: 280,
+            maxHeight: "calc(100vh - 380px)",
+            overflowY: "auto",
             zIndex: 1000,
           }}
           size="small"
@@ -768,6 +800,41 @@ export default function MapContent({
                       </span>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* 構成員番号 */}
+            {dataService.getMemberNumberMap().size > 0 && (
+              <div>
+                <div className="font-semibold text-gray-700 mb-2">
+                  構成員（番号）
+                </div>
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {Array.from(dataService.getMemberNumberMap().entries()).map(
+                    ([member, num]) => (
+                      <div key={num} className="flex items-center gap-2">
+                        <div
+                          style={{
+                            backgroundColor: "#666",
+                            width: 18,
+                            height: 18,
+                            borderRadius: "50%",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#fff",
+                            fontSize: "9px",
+                            fontWeight: "bold",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {num}
+                        </div>
+                        <span className="text-gray-700">{member}</span>
+                      </div>
+                    )
+                  )}
                 </div>
               </div>
             )}
@@ -866,6 +933,19 @@ export default function MapContent({
                                 <span className="text-gray-600">品種：</span>
                                 <span className="text-gray-900 font-medium">
                                   {cropData.variety}
+                                </span>
+                              </div>
+                            )}
+                            {cropData.member && (
+                              <div>
+                                <span className="text-gray-600">構成員：</span>
+                                <span className="text-gray-900 font-medium">
+                                  {cropData.member}
+                                  {dataService.getMemberNumberMap().get(cropData.member) && (
+                                    <span className="ml-1 text-purple-600">
+                                      （No.{dataService.getMemberNumberMap().get(cropData.member)}）
+                                    </span>
+                                  )}
                                 </span>
                               </div>
                             )}
